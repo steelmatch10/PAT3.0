@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PAT 3.0 — All Properties</title>
+  <link rel="stylesheet" href="assets/styles.css">
+  <script defer src="assets/app.js"></script>
+  <script defer src="assets/all.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="brand">
+        <div class="logo"></div>
+        <h1>All Properties <span class="small">Catalog</span></h1>
+      </div>
+      <div class="nav">
+        <a class="btn" href="index.html">Home</a>
+        <a class="btn primary" href="GRASP.html">Log with GRASP</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <select id="moduleFilter" class="input" style="min-width:180px">
+            <option value="">All Modules</option>
+            <option value="GRASP">GRASP</option>
+            <option value="FRAT">FRAT</option>
+          </select>
+          <select id="kpiFilter" class="input" style="min-width:180px">
+            <option value="">Any KPI band</option>
+            <option value="Great">Great</option>
+            <option value="Good">Good</option>
+            <option value="Okay">Okay</option>
+            <option value="Bad">Bad</option>
+            <option value="Negative">Negative</option>
+            <option value="N/A">N/A</option>
+          </select>
+        </div>
+        <div class="row" style="gap:8px">
+          <button class="btn" id="exportBtn">Export JSON</button>
+          <button class="btn ghost" id="clearCatalogBtn">Clear Catalog</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cards" class="grid two" style="margin-top:16px"></div>
+
+    <div class="footer">© PAT 3.0 — Cohesive catalog design</div>
+  </div>
+</body>
+</html>
