@@ -1,42 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>PAT 3.0 — GRASP</title>
-  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/styles.css"/>
   <script defer src="assets/app.js"></script>
   <script defer src="assets/grasp.js"></script>
 </head>
 <body>
   <div class="container">
-    <div class="header">
+    <header class="header">
       <div class="brand">
         <div class="logo"></div>
         <h1>GRASP <span class="small">Gauging Rental Asset Strength &amp; Potential</span></h1>
       </div>
-      <div class="nav">
-        <a class="btn" href="index.html">Home</a>
-        <a class="btn" href="all.html">All Properties</a>
-      </div>
-    </div>
+      <nav class="nav">
+        <a class="btn" href="index.html" id="homeBtn">Home</a>
+        <a class="btn" href="#" id="backBtn">Back</a>
+        <a class="btn" href="Catalogue.html">Catalogue</a>
+      </nav>
+    </header>
 
     <div class="grid two">
       <div class="card">
-        <div class="section-title">Core Income Drivers</div>
-        <div class="grid two">
-          <div class="input">
-            <label>Bedrooms / Units *</label>
-            <input type="number" id="units" min="0" placeholder="e.g., 3">
-          </div>
-          <div class="input">
-            <label>Rent per Bedroom/Unit (Monthly) *</label>
-            <input type="number" id="rentPerUnitMonthly" min="0" step="0.01" placeholder="e.g., 900">
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
+        <!-- 1) Valuation & Financing -->
         <div class="section-title">Valuation & Financing</div>
         <div class="grid two">
           <div class="input">
@@ -81,9 +69,9 @@
 
         <div class="divider"></div>
 
-        <div class="section-title">Recurring Carry Costs</div>
+        <!-- 2) Non-Miscellaneous Operating Costs -->
         <div class="row" style="justify-content:space-between;margin-bottom:8px">
-          <div class="small">Rent is monthly-only. Toggle converts Taxes, Insurance, HOA between monthly and annual.</div>
+          <div class="section-title" style="margin:0">Non-Miscellaneous Operating Costs</div>
           <label class="toggle">
             <input type="checkbox" id="viewModeToggle">
             <span class="pill"></span>
@@ -107,6 +95,22 @@
 
         <div class="divider"></div>
 
+        <!-- 3) Core Income Drivers -->
+        <div class="section-title">Core Income Drivers</div>
+        <div class="grid two">
+          <div class="input">
+            <label>Bedrooms / Units *</label>
+            <input type="number" id="units" min="0" placeholder="e.g., 3">
+          </div>
+          <div class="input">
+            <label>Rent per Bedroom/Unit (Monthly) *</label>
+            <input type="number" id="rentPerUnitMonthly" min="0" step="0.01" placeholder="e.g., 900">
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- 4) Notes -->
         <div class="section-title">Notes</div>
         <div class="input">
           <label>Comments</label>
@@ -116,40 +120,43 @@
         <div class="divider"></div>
 
         <div class="row" style="gap:8px">
-          <button class="btn primary" id="addBtn">Add Property to Catalog</button>
+          <button class="btn primary" id="addOrSaveBtn">Add Property to Catalogue</button>
           <button class="btn" id="clearBtn">Clear Inputs</button>
-          <a class="btn ghost" href="index.html">Back</a>
         </div>
       </div>
 
-      <div class="card kpi-panel">
+      <aside class="card kpi-panel">
         <h2>KPIs</h2>
         <div class="kpi-badges" id="kpiBadges"></div>
+
         <div class="divider"></div>
         <div>
           <div class="section-title">DSCR Price Guidance (85% NOI)</div>
           <div id="dscrGuide" class="grid two"></div>
         </div>
+
         <div class="divider"></div>
         <div>
           <div class="section-title">Suggested Rent / Unit</div>
           <div class="small">To hit targets, based on current costs and units.</div>
           <table class="table" style="margin-top:8px">
-            <thead>
-              <tr><th>Target</th><th>Rent / Unit (Monthly)</th></tr>
-            </thead>
+            <thead><tr><th>Target</th><th>Rent / Unit (Monthly)</th></tr></thead>
             <tbody id="suggestedRentBody"></tbody>
           </table>
         </div>
+
         <div class="divider"></div>
         <details>
           <summary>Show more</summary>
           <div id="supplemental" style="margin-top:10px"></div>
         </details>
-      </div>
+      </aside>
     </div>
-
-    <div class="footer">© PAT 3.0 — GRASP Module</div>
   </div>
+
+  <script>
+    // Back behavior
+    document.getElementById('backBtn').addEventListener('click', (e)=>{ e.preventDefault(); history.back(); });
+  </script>
 </body>
 </html>

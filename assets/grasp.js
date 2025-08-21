@@ -15,7 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
     insuranceMonthly: document.getElementById("insuranceMonthly"),
     hoaMonthly: document.getElementById("hoaMonthly"),
     comments: document.getElementById("comments"),
-    addBtn: document.getElementById("addBtn"),
+    addOrSaveBtn: document.getElementById("addOrSaveBtn"),
     clearBtn: document.getElementById("clearBtn"),
     viewModeToggle: document.getElementById("viewModeToggle"),
     viewModeLabel: document.getElementById("viewModeLabel"),
@@ -28,6 +28,35 @@ document.addEventListener("DOMContentLoaded", () => {
     suggestedRentBody: document.getElementById("suggestedRentBody")
   };
 
+  // --- Edit mode detection ---
+  const params = new URLSearchParams(location.search);
+  const editId = params.get("edit");
+  let isEditMode = false;
+  if(editId){
+    const cat = getCatalog();
+    const found = (cat.properties||[]).find(p => p.id === editId);
+    if(found){
+      isEditMode = true;
+      els.addOrSaveBtn.textContent = "Save Changes";
+      // Populate fields from property
+      els.address.value = found.source?.address || "";
+      els.link.value = found.source?.link || "";
+      els.propertyValue.value = found.inputs?.propertyValue ?? "";
+      els.percentDownPct.value = found.inputs?.percentDownPct ?? "";
+      els.rateAprPct.value = found.inputs?.rateAprPct ?? "";
+      els.loanLengthYears.value = found.inputs?.loanLengthYears ?? 30;
+      els.psf.value = found.inputs?.psf ?? "";
+      els.estImprovementCost.value = found.inputs?.estImprovementCost ?? "";
+      els.taxesMonthly.value = found.inputs?.taxesMonthly ?? "";
+      els.insuranceMonthly.value = found.inputs?.insuranceMonthly ?? "";
+      els.hoaMonthly.value = found.inputs?.hoaMonthly ?? "";
+      els.units.value = found.inputs?.bedroomsOrUnits ?? "";
+      els.rentPerUnitMonthly.value = found.inputs?.rentPerUnitMonthly ?? "";
+      els.comments.value = found.inputs?.comments ?? "";
+      persistFormState(collectForm());
+    }
+  }
+
   // Restore view mode
   const viewMode = readViewMode();
   const startAnnual = (viewMode === "annual");
@@ -35,10 +64,12 @@ document.addEventListener("DOMContentLoaded", () => {
   els.viewModeLabel.textContent = startAnnual ? "Annual view" : "Monthly view";
   setCarryCostLabels(startAnnual ? "annual" : "monthly");
 
-  // Restore form state
-  const state = readFormState();
-  for(const key in state){
-    if(els[key]) els[key].value = state[key];
+  // Restore form state if not editing
+  if(!isEditMode){
+    const state = readFormState();
+    for(const key in state){
+      if(els[key]) els[key].value = state[key];
+    }
   }
 
   // Toggle view mode: convert taxes/insurance/hoa
@@ -79,7 +110,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function collectForm(){
-    // Normalize carry costs back to monthly for computation, based on view mode
+    // Normalize carry costs to monthly for computation
     const mode = els.viewModeLabel.textContent.startsWith("Annual") ? "annual" : "monthly";
     const raw = {
       units: els.units.value,
@@ -97,8 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
       hoaMonthly: els.hoaMonthly.value,
       comments: els.comments.value
     };
-    const normalized = (mode==="annual") ? convertCarryCosts(raw, "annual", "monthly") : raw;
-    return normalized;
+    return (mode==="annual") ? convertCarryCosts(raw, "annual", "monthly") : raw;
   }
 
   function triggerCompute(){
@@ -159,7 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderSuggestedRent(k){
     const s = k.computed.suggestedRentPerUnit;
-    function cell(v){ return isFinite(v) ? formatMoney(v) : "N/A"; }
+    const cell = (v)=> isFinite(v) ? formatMoney(v) : "N/A";
     els.suggestedRentBody.innerHTML = `
       <tr><td>CoC 7%</td><td>${cell(s.coc.pct7)}</td></tr>
       <tr><td>CoC 5%</td><td>${cell(s.coc.pct5)}</td></tr>
@@ -183,13 +213,13 @@ document.addEventListener("DOMContentLoaded", () => {
       ["Gross Rent (Monthly)", formatMoney(c.grossRentMonthly)],
       ["NOI (Annual)", formatMoney(c.noiAnnual)],
       ["Annual Cash Flow", formatMoney(c.annualCashFlow)],
-      ["Misc (Monthly, hidden in math)", formatMoney(n.miscMonthly)]
+      ["Misc (Monthly)", formatMoney(n.miscMonthly)]
     ];
     els.supplemental.innerHTML = items.map(([k,v])=>`<div class="row" style="justify-content:space-between"><div class="small">${k}</div><div>${v}</div></div>`).join("");
   }
 
-  // Add property
-  els.addBtn.addEventListener("click", () => {
+  // Add or Save property
+  els.addOrSaveBtn.addEventListener("click", () => {
     const normalized = collectForm();
     const minimalOk = (toNumber(normalized.propertyValue)>0 &&
                        toNumber(normalized.percentDownPct)>=0 &&
@@ -213,9 +243,7 @@ document.addEventListener("DOMContentLoaded", () => {
       rentPerUnitMonthly: normalized.rentPerUnitMonthly
     });
 
-    const prop = {
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
+    const propCore = {
       module: "GRASP",
       source:{
         address: document.getElementById("address").value || "",
@@ -261,19 +289,40 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
 
-    savePropertyToCatalog(prop);
-    alert("Property added to catalog.");
+    const catalog = getCatalog();
+
+    if(isEditMode){
+      // Update existing by id
+      const idx = (catalog.properties||[]).findIndex(p => p.id === editId);
+      if(idx >= 0){
+        const prev = catalog.properties[idx];
+        catalog.properties[idx] = {
+          ...prev,
+          updatedAt: new Date().toISOString(),
+          ...propCore
+        };
+        saveCatalog(catalog);
+        alert("Changes saved.");
+      }
+    } else {
+      // Create new
+      const prop = {
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        pinned: false,
+        ...propCore
+      };
+      savePropertyToCatalog(prop);
+      alert("Property added to catalogue.");
+    }
   });
 
   // Clear inputs
   els.clearBtn.addEventListener("click", () => {
-    Object.values(els).forEach(el=>{
-      if(!el || !el.tagName) return;
-      if(el.tagName==="INPUT" || el.tagName==="TEXTAREA"){
-        if(el.type==="number" || el.type==="text" || el.type==="url") el.value = "";
-      }
-    });
-    els.loanLengthYears.value = 30;
+    [els.address,els.link,els.propertyValue,els.percentDownPct,els.rateAprPct,
+     els.loanLengthYears,els.psf,els.estImprovementCost,els.taxesMonthly,
+     els.insuranceMonthly,els.hoaMonthly,els.units,els.rentPerUnitMonthly,els.comments]
+     .forEach(el=>{ if(el) el.value = el.id==="loanLengthYears" ? 30 : ""; });
     persistFormState(collectForm());
     triggerCompute();
   });
