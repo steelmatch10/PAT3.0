@@ -34,24 +34,47 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  function applyCompactModeIfNeeded() {
+    // measure controls section height (first .card on the page)
+    const controls = document.querySelector("section.card");
+    const controlsH = controls ? controls.getBoundingClientRect().height : 120;
+
+    // Compute min height for property cards as 1.5 × controls card height
+    const minH = Math.max(180, Math.round(1.5 * controlsH));
+    document.documentElement.style.setProperty("--prop-min-h", `${minH}px`);
+
+    // If the list of property cards extends beyond viewport, enable compact mode.
+    const listH = document.body.getBoundingClientRect().height;
+    const overflow = listH > window.innerHeight + 24; // small buffer
+    if (overflow) {
+      document.body.classList.add("compact");
+    } else {
+      document.body.classList.remove("compact");
+    }
+  }
+
   function render(){
     const props = sortForDisplay(filteredProps());
 
     if(props.length===0){
       cards.innerHTML = `<div class="card"><div class="small">No properties match your filters.</div></div>`;
+      applyCompactModeIfNeeded();
       return;
     }
 
     cards.innerHTML = props.map(p => {
       const addr = parseAddress(p?.source?.address || "");
       const head = addr.line1 || "(No address)";
-      // Line2 only if it's a real unit/suite/apt (avoid showing city here)
+
+      // Line2 only if it's a unit/suite/apt (avoid showing city here)
       const hasUnit = addr.line2 && /(?:apt|suite|ste|unit|#)/i.test(addr.line2);
       const line2 = hasUnit ? `<div class="small" style="opacity:.85">${addr.line2}</div>` : "";
+
       // Country: show only if not US
       const cityStateZip = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
       const countryText = (addr.country && !/^(us|usa|united states)$/i.test(addr.country)) ? `, ${addr.country}` : "";
       const sub = cityStateZip || countryText ? `<div class="small" style="margin-top:2px">${cityStateZip}${countryText}</div>` : "";
+
       const link = p.source?.link ? `<a href="${p.source.link}" target="_blank">Listing</a>` : "<span class='small'>No link</span>";
 
       const coc = p.computed?.cashOnCash;
@@ -66,10 +89,10 @@ document.addEventListener("DOMContentLoaded", () => {
         : "";
 
       return `
-        <div class="card">
-          <div class="row" style="justify-content:space-between;align-items:flex-start">
-            <div style="display:flex;gap:10px;align-items:flex-start">
-              <input type="checkbox" class="selectBox" data-id="${p.id}" style="margin-top:4px"/>
+        <div class="card property-card">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <div style="display:flex;gap:10px;align-items:center">
+              <input type="checkbox" class="selectBox" data-id="${p.id}"/>
               <div>
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                   <div class="addr-head">${head}</div>
@@ -102,6 +125,8 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
     }).join("");
+
+    applyCompactModeIfNeeded();
   }
 
   // Click Pinned badge to unpin
@@ -163,6 +188,8 @@ document.addEventListener("DOMContentLoaded", () => {
     saveCatalog(catalog);
     render();
   });
+
+  window.addEventListener("resize", () => applyCompactModeIfNeeded());
 
   render();
 });

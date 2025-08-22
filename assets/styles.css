@@ -12,7 +12,8 @@
   --chip:#223157;
   --border:#223052;
   --coc-bg:rgba(110,168,254,.08);
-  --cap-bg:rgba(34,197,94,.08);
+  --cap-bg:rgba(34,197,94,.08); /* kept for future use, no longer applied to cap group */
+  --prop-min-h: 220px; /* JS can override for compact mode */
 }
 
 *{box-sizing:border-box}
@@ -50,6 +51,14 @@ h2{margin:0 0 12px;font-size:18px}
   background:var(--panel-2);color:var(--text);outline:none;
 }
 .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+
+/* Larger, better-aligned checkboxes (Catalogue) */
+.selectBox{
+  width:20px;height:20px;flex:0 0 20px;
+  accent-color:#89b4ff;
+  margin:0; /* avoid vertical drift */
+  vertical-align:middle;
+}
 
 .kpi-badges{display:flex;gap:10px;flex-wrap:wrap}
 .kpi{padding:10px 12px;border-radius:999px;border:1px solid var(--border);background:var(--chip);font-weight:700}
@@ -100,27 +109,38 @@ h2{margin:0 0 12px;font-size:18px}
 .container > .grid.two{grid-template-columns:1.2fr .8fr}
 @media (max-width:1100px){.container > .grid.two{grid-template-columns:1fr}}
 
-/* Suggested rent grouping */
+/* Suggested rent grouping — unified color, lighter weight headings, more spacing */
 .group-head {
   margin-top:6px;
   margin-bottom:6px;
-  font-weight:600;   /* SemiBold instead of bold */
+  font-weight:600; /* semi-bold */
   font-size:13px;
   color:var(--muted);
 }
-
 .group-box {
   border:1px solid var(--border);
   border-radius:10px;
   padding:8px;
-  margin-bottom:10px;
-  background:var(--coc-bg); /* unify background color for both */
+  margin-bottom:14px;       /* slightly increased spacing */
+  background:var(--coc-bg); /* same color for both groups */
 }
 
 /* Address emphasis (Catalogue) */
-.addr-head {
-  font-family: "Plus Jakarta Sans", Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  font-weight: 600;  /* SemiBold */
-  font-size: 28px;
-  letter-spacing: 0.2px;
+.addr-head{
+  font-family:"Plus Jakarta Sans", Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-weight:600;  /* SemiBold */
+  font-size:28px;
+  letter-spacing:.2px;
 }
+
+/* Property card sizing
+   - default (roomy) when few items
+   - compact when JS adds .compact to <body> (many items / overflow) */
+.property-card{min-height:var(--prop-min-h);}
+
+body.compact .property-card{
+  padding:14px;
+  min-height:var(--prop-min-h);
+}
+body.compact .addr-head{font-size:24px;font-weight:600}
+body.compact .table th, body.compact .table td{padding:8px}
