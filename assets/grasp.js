@@ -291,7 +291,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const catalog = getCatalog();
 
-    if(isEditMode){
+    if(editId){
       // Update existing by id
       const idx = (catalog.properties||[]).findIndex(p => p.id === editId);
       if(idx >= 0){
@@ -307,7 +307,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       // Create new
       const prop = {
-        id: crypto.randomUUID(),
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2),
         createdAt: new Date().toISOString(),
         pinned: false,
         ...propCore
