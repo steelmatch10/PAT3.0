@@ -1,6 +1,8 @@
-// ===== Shared Utilities for PAT =====
+// ===== PAT Shared Utilities (storage, formatting, math, address parsing, print) =====
 
-// --- Storage Helpers ---
+// -------------------------------
+// Storage & Persistence Helpers
+// -------------------------------
 function getCatalog() {
   try {
     const raw = localStorage.getItem("pat_catalog");
@@ -30,6 +32,7 @@ function updatePropertyInCatalog(id, updater) {
   }
   return false;
 }
+
 function persistFormState(obj) {
   localStorage.setItem("grasp_form", JSON.stringify(obj));
 }
@@ -37,16 +40,28 @@ function readFormState() {
   try { return JSON.parse(localStorage.getItem("grasp_form")) || {}; }
   catch { return {}; }
 }
+
 function saveViewMode(mode) { localStorage.setItem("grasp_viewmode", mode); }
 function readViewMode() { return localStorage.getItem("grasp_viewmode") || "monthly"; }
 
-// --- Numeric & Format Helpers ---
+// -------------------------------
+// Numeric & Formatting Helpers
+// -------------------------------
 function toNumber(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 function round2(x) { return Math.round((x + Number.EPSILON) * 100) / 100; }
-function formatMoney(v) { return (!isFinite(v)) ? "N/A" : "$" + round2(v).toLocaleString(); }
-function formatPct(v) { return (!isFinite(v)) ? "N/A" : (v * 100).toFixed(2) + "%"; }
 
-// --- Banding logic ---
+function formatMoney(v) {
+  if (!isFinite(v)) return "N/A";
+  return "$" + Math.round(v).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+function formatPct(v) {
+  if (!isFinite(v)) return "N/A";
+  return (v * 100).toFixed(2) + "%";
+}
+
+// -------------------------------
+// KPI Banding & Badge CSS helpers
+// -------------------------------
 function bandCoC(v){
   if(!isFinite(v)) return {label:"N/A"};
   if(v > 0.07) return {label:"Great"};
@@ -66,10 +81,11 @@ function bandCapRate(v){
 function bandDSCR(v){
   if(!isFinite(v)) return {label:"N/A"};
   if(v > 1.36) return {label:"Great"};
-  if(v >= 1.21) return {label:"Okay"}; // no Good band per your spec
+  if(v >= 1.21) return {label:"Okay"}; // per your spec
   if(v >= 0) return {label:"Bad"};
   return {label:"N/A"};
 }
+
 function kpiClass(b){
   switch(b?.label){
     case "Great": return "kpi great";
@@ -91,47 +107,85 @@ function badgeClass(b){
   }
 }
 
-// --- Address Helpers ---
+// -------------------------------
+// Address Parsing & Duplicate Check
+// -------------------------------
 function normalizeWhitespace(s){ return (s||"").replace(/\s+/g," ").trim(); }
+
+/**
+ * parseAddress:
+ * Attempts to extract { line1, line2, city, state, zip, country } from a comma-separated string.
+ * Heuristics used:
+ *  - If the 2nd part looks like a unit ("Apt", "Suite", "Ste", "Unit", "#"), treat as line2, otherwise it's likely part of locality.
+ *  - Country recognized as the last segment when it doesn't look like "STATE ZIP".
+ *  - City/State/ZIP inferred from the tail segments. Country omitted if "United States".
+ */
 function parseAddress(raw){
   const s = normalizeWhitespace(raw);
-  if(!s) return { raw:"", line1:"", line2:"", city:"", state:"", zip:"", normalized:"" };
-  // Heuristic: split by comma
-  const parts = s.split(",").map(p=>p.trim());
-  const line1 = parts[0] || "";
-  let line2 = "";
-  let city = "", state = "", zip = "";
-  if(parts.length === 2){
-    // "line1, city state zip"
-    const rest = parts[1].split(/\s+/);
-    city = rest.slice(0, -2).join(" ") || "";
-    state = rest.slice(-2, -1)[0] || "";
-    zip = rest.slice(-1)[0] || "";
-  } else if(parts.length >= 3){
-    line2 = parts[1] || "";
-    city = parts[2] || "";
-    if(parts[3]){
-      const stz = parts[3].trim().split(/\s+/);
+  if(!s) return { raw:"", line1:"", line2:"", city:"", state:"", zip:"", country:"", normalized:"" };
+
+  const parts = s.split(",").map(p=>p.trim()).filter(Boolean);
+  let line1="", line2="", city="", state="", zip="", country="";
+
+  if(parts.length === 1){
+    line1 = parts[0];
+  } else {
+    line1 = parts[0];
+
+    // Candidate trailing segments
+    const last = parts[parts.length-1];
+    const last2 = parts[parts.length-2] || "";
+
+    // If last is a ZIP (##### or #####-####), then last2 should contain the state, and city is before that.
+    if(/^\d{5}(?:-\d{4})?$/.test(last)){
+      const stz = last2.split(/\s+/);
+      state = stz[0] || "";
+      zip = last || "";
+      city = parts[parts.length-3] || "";
+      // If second piece looks like a unit designator, capture as line2
+      if(parts[1] && /(?:apt|suite|ste|unit|#)/i.test(parts[1])) line2 = parts[1];
+    } else {
+      // Otherwise, treat last as country, and last2 as "STATE ZIP"
+      country = last;
+      const stz = last2.split(/\s+/);
       state = stz[0] || "";
       zip = stz[1] || "";
+      city = parts[parts.length-3] || "";
+      if(parts[1] && /(?:apt|suite|ste|unit|#)/i.test(parts[1])) line2 = parts[1];
+    }
+
+    // Fallback: handle "line1, city state zip" (2 segments only)
+    if(!city && parts.length===2){
+      const rest = parts[1].split(/\s+/);
+      city = rest.slice(0,-2).join(" ") || "";
+      state = rest.slice(-2,-1)[0] || "";
+      zip = rest.slice(-1)[0] || "";
     }
   }
-  const normalized = (line1 + "|" + line2 + "|" + city + "|" + state + "|" + zip).toLowerCase();
-  return { raw:s, line1, line2, city, state, zip, normalized };
+
+  // Normalize common country strings
+  if(/^(us|usa|united states|united states of america)$/i.test(country)) country = "United States";
+
+  const normalized = (line1 + "|" + line2 + "|" + city + "|" + state + "|" + zip + "|" + country).toLowerCase();
+  return { raw:s, line1, line2, city, state, zip, country, normalized };
 }
+
 function findDuplicateByAddress(addressRaw){
   const cat = getCatalog();
   const target = parseAddress(addressRaw);
   if(!target.normalized) return null;
   const hit = (cat.properties||[]).find(p => {
     const pa = parseAddress(p?.source?.address || "");
+    // Require same line1 and same normalized string for a strict duplicate
     return pa.line1.toLowerCase() === target.line1.toLowerCase() &&
            pa.normalized === target.normalized;
   });
   return hit || null;
 }
 
-// --- Conversion Helpers (carry costs only) ---
+// -------------------------------
+// Carry Cost Conversion (Monthly <-> Annual for Taxes/Insurance/HOA only)
+// -------------------------------
 function convertCarryCosts(raw, fromMode, toMode){
   let t = toNumber(raw.taxesMonthly || 0);
   let i = toNumber(raw.insuranceMonthly || 0);
@@ -141,7 +195,9 @@ function convertCarryCosts(raw, fromMode, toMode){
   return { ...raw, taxesMonthly: round2(t), insuranceMonthly: round2(i), hoaMonthly: round2(h) };
 }
 
-// --- Core Computation ---
+// -------------------------------
+// Core Computation (GRASP)
+// -------------------------------
 function computeAll(input){
   const propertyValue = toNumber(input.propertyValue);
   const percentDown = toNumber(input.percentDownPct)/100;
@@ -155,8 +211,8 @@ function computeAll(input){
   const rentPerUnitMonthly = toNumber(input.rentPerUnitMonthly);
 
   const downPayment = propertyValue * percentDown;
-  const closingCosts = propertyValue * 0.05;     // 5%
-  const miscMonthly = (propertyValue * 0.01) / 12; // 1% annual
+  const closingCosts = propertyValue * 0.05;        // 5%
+  const miscMonthly = (propertyValue * 0.01) / 12;  // 1% annual
 
   const loanAmount = Math.max(0, propertyValue - downPayment);
   const r = rateApr/12;
@@ -182,10 +238,11 @@ function computeAll(input){
   const cashOnCash = (totalInitialInvestment>0) ? (annualCashFlow / totalInitialInvestment) : NaN;
   const dscr = (mortgageMonthly>0) ? (noiAnnual / (mortgageMonthly*12)) : NaN;
 
+  // DSCR target price using 85% of NOI
   function priceForDSCR(target){
     if(target<=0) return NaN;
-    const ADS = (0.85 * noiAnnual) / target; // 85% NOI
-    const PMT = ADS / 12;
+    const ADS = (0.85 * noiAnnual) / target;   // Annual Debt Service target
+    const PMT = ADS / 12;                      // Monthly payment target
     let loanTarget = 0;
     if(r===0){
       loanTarget = PMT * n;
@@ -200,6 +257,7 @@ function computeAll(input){
     return (isFinite(price) && price>0) ? price : NaN;
   }
 
+  // Suggested rent / unit to hit targets
   function rentPerUnitForCoC(targetCoC){
     if(units<=0) return NaN;
     const numer = targetCoC*totalInitialInvestment + 12*(operatingExpensesMonthly + mortgageMonthly);
@@ -232,19 +290,30 @@ function computeAll(input){
   };
 }
 
-// --- Simple printable HTML for PDF export (browser print-to-PDF) ---
+// -------------------------------
+// Printable Catalogue (Export → PDF via browser print dialog)
+// -------------------------------
 function openPrintableCatalogue(props){
   const w = window.open("", "_blank");
   if(!w) return;
   const rows = props.map(p=>{
     const addr = parseAddress(p?.source?.address || "");
     const head = addr.line1 || "(No address)";
-    const sub = [addr.line2, [addr.city, addr.state, addr.zip].filter(Boolean).join(", ")].filter(Boolean).join(" — ");
+    const subBits = [];
+    if(addr.line2) subBits.push(addr.line2);
+    const locLine = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
+    if(locLine) subBits.push(locLine);
+    // Country shown only if not US
+    if(addr.country && !/^(united states)$/i.test(addr.country)) subBits.push(addr.country);
+
     const coc = isFinite(p.computed?.cashOnCash) ? (p.computed.cashOnCash*100).toFixed(2)+"%" : "N/A";
     const cap = isFinite(p.computed?.capRate) ? (p.computed.capRate*100).toFixed(2)+"%" : "N/A";
     const dscr = isFinite(p.computed?.dscr) ? p.computed.dscr.toFixed(2) : "N/A";
     return `<tr>
-      <td><div style="font-weight:700">${head}</div><div style="font-size:12px;color:#555">${sub||""}</div></td>
+      <td>
+        <div style="font-weight:700">${head}</div>
+        <div style="font-size:12px;color:#555">${subBits.join(" — ")}</div>
+      </td>
       <td>${formatMoney(p.inputs.propertyValue)}</td>
       <td>${coc}</td>
       <td>${cap}</td>

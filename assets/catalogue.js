@@ -6,8 +6,26 @@ document.addEventListener("DOMContentLoaded", () => {
   const searchBox = document.getElementById("searchBox");
   const exportBtn = document.getElementById("exportBtn");
   const exportSelect = document.getElementById("exportSelect");
-  const pinBtn = document.getElementById("pinSelectedBtn");
+  const pinToggleBtn = document.getElementById("pinToggleBtn");
   const delBtn = document.getElementById("deleteSelectedBtn");
+
+  function filteredProps() {
+    const catalog = getCatalog();
+    const q = (searchBox.value || "").toLowerCase().trim();
+    const mod = moduleFilter.value;
+    const kpi = kpiFilter.value;
+
+    let props = catalog.properties || [];
+    if (mod) props = props.filter(p => p.module === mod);
+    if (kpi) props = props.filter(p => [p.bands?.cashOnCash, p.bands?.capRate, p.bands?.dscr].includes(kpi));
+    if (q) {
+      props = props.filter(p => {
+        const a = parseAddress(p?.source?.address || "");
+        return a.line1.toLowerCase().includes(q);
+      });
+    }
+    return props;
+  }
 
   function sortForDisplay(arr){
     return [...arr].sort((a,b)=>{
@@ -17,24 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function render(){
-    const catalog = getCatalog();
-    const q = (searchBox.value || "").toLowerCase().trim();
-    let props = catalog.properties || [];
-    const mod = moduleFilter.value;
-    const kpi = kpiFilter.value;
-
-    if(mod) props = props.filter(p => p.module === mod);
-    if(kpi){
-      props = props.filter(p => [p.bands?.cashOnCash, p.bands?.capRate, p.bands?.dscr].includes(kpi));
-    }
-    if(q){
-      props = props.filter(p => {
-        const a = parseAddress(p?.source?.address || "");
-        return (a.line1.toLowerCase().includes(q));
-      });
-    }
-
-    props = sortForDisplay(props);
+    const props = sortForDisplay(filteredProps());
 
     if(props.length===0){
       cards.innerHTML = `<div class="card"><div class="small">No properties match your filters.</div></div>`;
@@ -44,9 +45,13 @@ document.addEventListener("DOMContentLoaded", () => {
     cards.innerHTML = props.map(p => {
       const addr = parseAddress(p?.source?.address || "");
       const head = addr.line1 || "(No address)";
-      const line2 = addr.line2 ? `<div class="small" style="opacity:.85">${addr.line2}</div>` : "";
-      const cityRow = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
-      const sub = cityRow ? `<div class="small" style="margin-top:2px">${cityRow}</div>` : "";
+      // Line2 only if it's a real unit/suite/apt (avoid showing city here)
+      const hasUnit = addr.line2 && /(?:apt|suite|ste|unit|#)/i.test(addr.line2);
+      const line2 = hasUnit ? `<div class="small" style="opacity:.85">${addr.line2}</div>` : "";
+      // Country: show only if not US
+      const cityStateZip = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
+      const countryText = (addr.country && !/^(us|usa|united states)$/i.test(addr.country)) ? `, ${addr.country}` : "";
+      const sub = cityStateZip || countryText ? `<div class="small" style="margin-top:2px">${cityStateZip}${countryText}</div>` : "";
       const link = p.source?.link ? `<a href="${p.source.link}" target="_blank">Listing</a>` : "<span class='small'>No link</span>";
 
       const coc = p.computed?.cashOnCash;
@@ -55,7 +60,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const bCoC = bandCoC(coc);
       const bCap = bandCapRate(cap);
       const bDSCR = bandDSCR(dscr);
-      const pinBadge = p.pinned ? `<span class="badge good">Pinned</span>` : "";
+
+      const pinBadge = p.pinned
+        ? `<button class="badge good pinBadge" data-id="${p.id}" title="Click to unpin">Pinned</button>`
+        : "";
 
       return `
         <div class="card">
@@ -64,7 +72,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <input type="checkbox" class="selectBox" data-id="${p.id}" style="margin-top:4px"/>
               <div>
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                  <div style="font-weight:800;font-size:18px">${head}</div>
+                  <div class="addr-head">${head}</div>
                   ${line2}
                   ${pinBadge}
                 </div>
@@ -96,6 +104,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }).join("");
   }
 
+  // Click Pinned badge to unpin
+  cards.addEventListener("click", (e) => {
+    const btn = e.target.closest(".pinBadge");
+    if(!btn) return;
+    const id = btn.dataset.id;
+    const catalog = getCatalog();
+    const idx = (catalog.properties||[]).findIndex(p => p.id === id);
+    if (idx >= 0) {
+      catalog.properties[idx].pinned = false;
+      catalog.properties[idx].updatedAt = new Date().toISOString();
+      saveCatalog(catalog);
+      render();
+    }
+  });
+
   // Filters & search
   moduleFilter.addEventListener("change", render);
   kpiFilter.addEventListener("change", render);
@@ -104,15 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Export
   exportBtn.addEventListener("click", () => {
     const catalog = getCatalog();
-    // Reuse filtering before export
-    const q = (searchBox.value || "").toLowerCase().trim();
-    const mod = moduleFilter.value;
-    const kpi = kpiFilter.value;
-    let props = catalog.properties || [];
-    if(mod) props = props.filter(p => p.module === mod);
-    if(kpi) props = props.filter(p => [p.bands?.cashOnCash, p.bands?.capRate, p.bands?.dscr].includes(kpi));
-    if(q) props = props.filter(p => parseAddress(p?.source?.address||"").line1.toLowerCase().includes(q));
-
+    let props = filteredProps();
     const which = exportSelect.value;
     if(which === "json"){
       const blob = new Blob([JSON.stringify({ schemaVersion: catalog.schemaVersion, properties: props }, null, 2)], {type: "application/json"});
@@ -125,16 +140,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Pin / Delete
-  pinBtn.addEventListener("click", () => {
-    const catalog = getCatalog();
+  // Pin/Unpin selected
+  pinToggleBtn.addEventListener("click", () => {
     const checks = [...document.querySelectorAll(".selectBox:checked")].map(cb => cb.dataset.id);
-    if(checks.length===0){ alert("Select at least one property to pin."); return; }
-    catalog.properties = (catalog.properties||[]).map(p => checks.includes(p.id) ? ({...p, pinned:true, updatedAt: new Date().toISOString()}) : p);
+    if(checks.length===0){ alert("Select at least one property to pin/unpin."); return; }
+    const catalog = getCatalog();
+    catalog.properties = (catalog.properties||[]).map(p => {
+      if(!checks.includes(p.id)) return p;
+      return { ...p, pinned: !p.pinned, updatedAt: new Date().toISOString() };
+    });
     saveCatalog(catalog);
     render();
   });
 
+  // Delete
   delBtn.addEventListener("click", () => {
     const checks = [...document.querySelectorAll(".selectBox:checked")].map(cb => cb.dataset.id);
     if(checks.length===0){ alert("Select at least one property to delete."); return; }
