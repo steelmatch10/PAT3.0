@@ -32,10 +32,11 @@ a:hover{text-decoration:underline}
 
 .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px}
 .grid{display:grid;gap:16px}
+.grid.one{grid-template-columns:1fr}
 .grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .grid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
-@media (max-width:1100px){.grid.two,.grid.three,.grid.four{grid-template-columns:1fr}}
+@media (max-width:1100px){.grid.one,.grid.two,.grid.three,.grid.four{grid-template-columns:1fr}}
 
 .section-title{font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:6px 0 10px}
 h2{margin:0 0 12px;font-size:18px}

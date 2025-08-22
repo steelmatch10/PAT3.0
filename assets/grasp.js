@@ -25,20 +25,20 @@ document.addEventListener("DOMContentLoaded", () => {
     kpiBadges: document.getElementById("kpiBadges"),
     supplemental: document.getElementById("supplemental"),
     dscrGuide: document.getElementById("dscrGuide"),
-    suggestedRentBody: document.getElementById("suggestedRentBody")
+    suggestedRentBody: document.getElementById("suggestedRentBody"),
+    moreDetails: document.getElementById("moreDetails")
   };
 
   // --- Edit mode detection ---
   const params = new URLSearchParams(location.search);
-  const editId = params.get("edit");
-  let isEditMode = false;
-  if(editId){
+  let editId = params.get("edit");
+  let isEditMode = !!editId;
+
+  if(isEditMode){
     const cat = getCatalog();
     const found = (cat.properties||[]).find(p => p.id === editId);
     if(found){
-      isEditMode = true;
       els.addOrSaveBtn.textContent = "Save Changes";
-      // Populate fields from property
       els.address.value = found.source?.address || "";
       els.link.value = found.source?.link || "";
       els.propertyValue.value = found.inputs?.propertyValue ?? "";
@@ -54,25 +54,26 @@ document.addEventListener("DOMContentLoaded", () => {
       els.rentPerUnitMonthly.value = found.inputs?.rentPerUnitMonthly ?? "";
       els.comments.value = found.inputs?.comments ?? "";
       persistFormState(collectForm());
+    } else {
+      // If id missing, fall back to add mode
+      isEditMode = false;
+      editId = null;
+      els.addOrSaveBtn.textContent = "Add Property to Catalogue";
     }
+  } else {
+    // Restore form state (only when not editing)
+    const state = readFormState();
+    for(const key in state){ if(els[key]) els[key].value = state[key]; }
   }
 
-  // Restore view mode
+  // --- View mode ---
   const viewMode = readViewMode();
   const startAnnual = (viewMode === "annual");
   els.viewModeToggle.checked = startAnnual;
   els.viewModeLabel.textContent = startAnnual ? "Annual view" : "Monthly view";
   setCarryCostLabels(startAnnual ? "annual" : "monthly");
 
-  // Restore form state if not editing
-  if(!isEditMode){
-    const state = readFormState();
-    for(const key in state){
-      if(els[key]) els[key].value = state[key];
-    }
-  }
-
-  // Toggle view mode: convert taxes/insurance/hoa
+  // Toggle view mode: convert carry costs
   els.viewModeToggle.addEventListener("change", () => {
     const fromMode = els.viewModeLabel.textContent.startsWith("Monthly") ? "monthly" : "annual";
     const toMode = (fromMode === "monthly") ? "annual" : "monthly";
@@ -90,7 +91,6 @@ document.addEventListener("DOMContentLoaded", () => {
     saveViewMode(toMode);
     triggerCompute();
   });
-
   function setCarryCostLabels(mode){
     const sfx = mode==="annual" ? " (Annual)" : " (Monthly)";
     els.taxesLabel.textContent = "Taxes" + sfx;
@@ -98,19 +98,32 @@ document.addEventListener("DOMContentLoaded", () => {
     els.hoaLabel.textContent = "HOA" + sfx;
   }
 
-  // Input listeners
+  // Show more/less label behavior
+  if(els.moreDetails){
+    const summary = els.moreDetails.querySelector("summary");
+    const syncLabel = () => { summary.textContent = els.moreDetails.open ? "Show less" : "Show more"; };
+    els.moreDetails.addEventListener("toggle", syncLabel);
+    // ensure initial label
+    setTimeout(() => syncLabel(), 0);
+  }
+
+  // Input listeners: persist + compute
   ["input","change"].forEach(evt=>{
-    Object.values(els).forEach(el=>{
-      if(!el || !el.tagName || (el.tagName!=="INPUT" && el.tagName!=="TEXTAREA")) return;
-      el.addEventListener(evt, () => {
-        persistFormState(collectForm());
-        triggerCompute();
-      });
-    });
+    ["units","rentPerUnitMonthly","address","link","propertyValue","percentDownPct","rateAprPct",
+     "loanLengthYears","psf","estImprovementCost","taxesMonthly","insuranceMonthly","hoaMonthly","comments"]
+     .forEach(id=>{
+       const el = els[id];
+       if(!el) return;
+       el.addEventListener(evt, () => {
+         persistFormState(collectForm());
+         // Address duplicate hint (non-blocking)
+         if(id==="address"){ checkDuplicateAddressUI(); }
+         triggerCompute();
+       });
+     });
   });
 
   function collectForm(){
-    // Normalize carry costs to monthly for computation
     const mode = els.viewModeLabel.textContent.startsWith("Annual") ? "annual" : "monthly";
     const raw = {
       units: els.units.value,
@@ -129,6 +142,18 @@ document.addEventListener("DOMContentLoaded", () => {
       comments: els.comments.value
     };
     return (mode==="annual") ? convertCarryCosts(raw, "annual", "monthly") : raw;
+  }
+
+  // Duplicate detection UI feedback
+  function checkDuplicateAddressUI(){
+    const dup = findDuplicateByAddress(els.address.value);
+    if(dup && !isEditMode){
+      els.addOrSaveBtn.textContent = "View/Update Pre-Existing Property in Catalogue";
+      els.addOrSaveBtn.dataset.dupId = dup.id;
+    } else {
+      els.addOrSaveBtn.textContent = isEditMode ? "Save Changes" : "Add Property to Catalogue";
+      delete els.addOrSaveBtn.dataset.dupId;
+    }
   }
 
   function triggerCompute(){
@@ -203,23 +228,36 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderSupplemental(k){
     const c = k.computed;
     const n = k.inputsNormalized;
-    const items = [
-      ["Down Payment", formatMoney(n.downPayment)],
-      ["Closing Costs (5%)", formatMoney(n.closingCosts)],
-      ["Loan Amount", formatMoney(n.loanAmount)],
-      ["Mortgage (Monthly)", formatMoney(c.mortgageMonthly)],
-      ["Ownership Cost (Monthly)", formatMoney(c.ownershipCostMonthly)],
-      ["Operating Expenses (Monthly)", formatMoney(c.operatingExpensesMonthly)],
-      ["Gross Rent (Monthly)", formatMoney(c.grossRentMonthly)],
-      ["NOI (Annual)", formatMoney(c.noiAnnual)],
-      ["Annual Cash Flow", formatMoney(c.annualCashFlow)],
-      ["Misc (Monthly)", formatMoney(n.miscMonthly)]
+
+    // Tooltips with algebra (title attributes)
+    const rows = [
+      { label:"Down Payment", val: formatMoney(n.downPayment), tip:"Down = Property Value × Percent Down" },
+      { label:"Closing Costs (5%)", val: formatMoney(n.closingCosts), tip:"Closing = Property Value × 5%" },
+      { label:"Loan Amount", val: formatMoney(n.loanAmount), tip:"Loan = Property Value − Down Payment" },
+      { label:"Mortgage (Monthly)", val: formatMoney(c.mortgageMonthly), tip:"PMT = r·L / (1 − (1+r)^−n), r=APR/12, n=years×12" },
+      { label:"Ownership Cost (Monthly)", val: formatMoney(c.ownershipCostMonthly), tip:"Ownership = Operating Expenses + Mortgage" },
+      { label:"Operating Expenses (Monthly)", val: formatMoney(c.operatingExpensesMonthly), tip:"OpEx = Taxes + Insurance + HOA + Misc(1%/yr ÷ 12)" },
+      { label:"Gross Rent (Monthly)", val: formatMoney(c.grossRentMonthly), tip:"Gross = Units × Rent/Unit" },
+      { label:"NOI (Annual)", val: formatMoney(c.noiAnnual), tip:"NOI = (Gross − OpEx) × 12" },
+      { label:"Annual Cash Flow", val: formatMoney(c.annualCashFlow), tip:"CF = (Gross − OpEx − Mortgage) × 12" },
+      { label:"Misc (Monthly)", val: formatMoney(n.miscMonthly), tip:"Misc = Property Value × 1% ÷ 12" }
     ];
-    els.supplemental.innerHTML = items.map(([k,v])=>`<div class="row" style="justify-content:space-between"><div class="small">${k}</div><div>${v}</div></div>`).join("");
+    els.supplemental.innerHTML = rows.map(r =>
+      `<div class="row" style="justify-content:space-between" title="${r.tip}">
+         <div class="small">${r.label}</div><div>${r.val}</div>
+       </div>`
+    ).join("");
   }
 
-  // Add or Save property
+  // Add / Save with duplicate protection & post-add switch to edit mode
   els.addOrSaveBtn.addEventListener("click", () => {
+    // If duplicate detected and not editing: redirect to edit
+    if(!isEditMode && els.addOrSaveBtn.dataset.dupId){
+      const id = els.addOrSaveBtn.dataset.dupId;
+      location.href = `GRASP.html?edit=${id}`;
+      return;
+    }
+
     const normalized = collectForm();
     const minimalOk = (toNumber(normalized.propertyValue)>0 &&
                        toNumber(normalized.percentDownPct)>=0 &&
@@ -230,6 +268,17 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("Please provide at least: Property Value, Percent Down, Rate, Units, Rent per Unit.");
       return;
     }
+
+    // Duplicate check (line1 then full address)
+    if(!isEditMode){
+      const dup = findDuplicateByAddress(els.address.value);
+      if(dup){
+        alert("Property already in catalogue. Redirecting to view/update.");
+        location.href = `GRASP.html?edit=${dup.id}`;
+        return;
+      }
+    }
+
     const computed = computeAll({
       propertyValue: normalized.propertyValue,
       percentDownPct: normalized.percentDownPct,
@@ -246,8 +295,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const propCore = {
       module: "GRASP",
       source:{
-        address: document.getElementById("address").value || "",
-        link: document.getElementById("link").value || "",
+        address: els.address.value || "",
+        link: els.link.value || "",
         entryMode: "manual"
       },
       inputs:{
@@ -261,8 +310,8 @@ document.addEventListener("DOMContentLoaded", () => {
         estImprovementCost: toNumber(normalized.estImprovementCost),
         bedroomsOrUnits: parseInt(normalized.units||"0",10),
         rentPerUnitMonthly: toNumber(normalized.rentPerUnitMonthly),
-        psf: toNumber(document.getElementById("psf").value || "0") || null,
-        comments: document.getElementById("comments").value || "",
+        psf: toNumber(els.psf.value || "0") || null,
+        comments: els.comments.value || "",
         closingCostsRate: 0.05,
         miscRateAnnual: 0.01
       },
@@ -289,44 +338,39 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
 
-    const catalog = getCatalog();
-
-    if(editId){
-      // Update existing by id
-      const idx = (catalog.properties||[]).findIndex(p => p.id === editId);
-      if(idx >= 0){
-        const prev = catalog.properties[idx];
-        catalog.properties[idx] = {
-          ...prev,
-          updatedAt: new Date().toISOString(),
-          ...propCore
-        };
-        saveCatalog(catalog);
-        alert("Changes saved.");
-      }
+    if(isEditMode){
+      updatePropertyInCatalog(editId, (prev)=>({ ...prev, ...propCore }));
+      alert("Changes saved.");
     } else {
-      // Create new
-      const prop = {
-        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2),
-        createdAt: new Date().toISOString(),
-        pinned: false,
-        ...propCore
-      };
+      const newId = (crypto.randomUUID ? crypto.randomUUID() : (String(Date.now())+Math.random().toString(16).slice(2)));
+      const prop = { id:newId, createdAt:new Date().toISOString(), pinned:false, ...propCore };
       savePropertyToCatalog(prop);
-      alert("Property added to catalogue.");
+      alert("Property added to catalogue. Switching to edit mode for this entry.");
+      // Switch to edit mode (Option 2 behavior)
+      location.href = `GRASP.html?edit=${newId}`;
+      return;
     }
+    checkDuplicateAddressUI();
   });
 
-  // Clear inputs
+  // Clear inputs (manual reset)
   els.clearBtn.addEventListener("click", () => {
     [els.address,els.link,els.propertyValue,els.percentDownPct,els.rateAprPct,
      els.loanLengthYears,els.psf,els.estImprovementCost,els.taxesMonthly,
      els.insuranceMonthly,els.hoaMonthly,els.units,els.rentPerUnitMonthly,els.comments]
      .forEach(el=>{ if(el) el.value = el.id==="loanLengthYears" ? 30 : ""; });
     persistFormState(collectForm());
+    isEditMode = false; editId = null;
+    els.addOrSaveBtn.textContent = "Add Property to Catalogue";
+    delete els.addOrSaveBtn.dataset.dupId;
     triggerCompute();
   });
 
-  // Initial compute
+  // Initial render
+  checkDuplicateAddressUI();
   triggerCompute();
+
+  // Back behavior (in GRASP.html)
+  const backBtn = document.getElementById('backBtn');
+  if(backBtn){ backBtn.addEventListener('click',(e)=>{ e.preventDefault(); history.back(); }); }
 });

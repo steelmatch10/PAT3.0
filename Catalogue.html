@@ -13,7 +13,7 @@
     <header class="header">
       <div class="brand">
         <div class="logo"></div>
-        <h1>Catalogue <span class="small">Properties</span></h1>
+        <h1>Catalogue</h1>
       </div>
       <nav class="nav">
         <a class="btn" href="index.html">Home</a>
@@ -24,12 +24,13 @@
     <section class="card">
       <div class="row" style="justify-content:space-between">
         <div class="row" style="gap:8px">
-          <select id="moduleFilter" class="input" style="min-width:180px">
+          <input class="input" id="searchBox" placeholder="Search by street address…" style="min-width:240px"/>
+          <select id="moduleFilter" class="input" style="min-width:160px">
             <option value="">All Modules</option>
             <option value="GRASP">GRASP</option>
             <option value="FRAT">FRAT</option>
           </select>
-          <select id="kpiFilter" class="input" style="min-width:180px">
+          <select id="kpiFilter" class="input" style="min-width:160px">
             <option value="">Any KPI band</option>
             <option value="Great">Great</option>
             <option value="Good">Good</option>
@@ -40,14 +41,18 @@
           </select>
         </div>
         <div class="row" style="gap:8px">
-          <button class="btn" id="exportBtn">Export JSON</button>
+          <select id="exportSelect" class="input" style="min-width:140px">
+            <option value="json">Export: JSON</option>
+            <option value="pdf">Export: PDF</option>
+          </select>
+          <button class="btn" id="exportBtn">Export</button>
           <button class="btn" id="pinSelectedBtn">Pin Selected</button>
           <button class="btn ghost" id="deleteSelectedBtn">Delete Selected</button>
         </div>
       </div>
     </section>
 
-    <section id="cards" class="grid two" style="margin-top:16px"></section>
+    <section id="cards" class="grid one" style="margin-top:16px"></section>
   </div>
 </body>
 </html>

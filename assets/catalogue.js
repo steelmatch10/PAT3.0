@@ -1,13 +1,15 @@
+// ===== Catalogue Page Logic =====
 document.addEventListener("DOMContentLoaded", () => {
   const cards = document.getElementById("cards");
   const moduleFilter = document.getElementById("moduleFilter");
   const kpiFilter = document.getElementById("kpiFilter");
+  const searchBox = document.getElementById("searchBox");
   const exportBtn = document.getElementById("exportBtn");
+  const exportSelect = document.getElementById("exportSelect");
   const pinBtn = document.getElementById("pinSelectedBtn");
   const delBtn = document.getElementById("deleteSelectedBtn");
 
   function sortForDisplay(arr){
-    // Pinned first, then recent first
     return [...arr].sort((a,b)=>{
       if((b.pinned?1:0)!==(a.pinned?1:0)) return (b.pinned?1:0)-(a.pinned?1:0);
       return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
@@ -16,6 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function render(){
     const catalog = getCatalog();
+    const q = (searchBox.value || "").toLowerCase().trim();
     let props = catalog.properties || [];
     const mod = moduleFilter.value;
     const kpi = kpiFilter.value;
@@ -24,17 +27,28 @@ document.addEventListener("DOMContentLoaded", () => {
     if(kpi){
       props = props.filter(p => [p.bands?.cashOnCash, p.bands?.capRate, p.bands?.dscr].includes(kpi));
     }
+    if(q){
+      props = props.filter(p => {
+        const a = parseAddress(p?.source?.address || "");
+        return (a.line1.toLowerCase().includes(q));
+      });
+    }
 
     props = sortForDisplay(props);
 
     if(props.length===0){
-      cards.innerHTML = `<div class="card"><div class="small">No properties logged yet.</div></div>`;
+      cards.innerHTML = `<div class="card"><div class="small">No properties match your filters.</div></div>`;
       return;
     }
 
     cards.innerHTML = props.map(p => {
-      const addr = p.source?.address || "(No address)";
+      const addr = parseAddress(p?.source?.address || "");
+      const head = addr.line1 || "(No address)";
+      const line2 = addr.line2 ? `<div class="small" style="opacity:.85">${addr.line2}</div>` : "";
+      const cityRow = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
+      const sub = cityRow ? `<div class="small" style="margin-top:2px">${cityRow}</div>` : "";
       const link = p.source?.link ? `<a href="${p.source.link}" target="_blank">Listing</a>` : "<span class='small'>No link</span>";
+
       const coc = p.computed?.cashOnCash;
       const cap = p.computed?.capRate;
       const dscr = p.computed?.dscr;
@@ -46,11 +60,16 @@ document.addEventListener("DOMContentLoaded", () => {
       return `
         <div class="card">
           <div class="row" style="justify-content:space-between;align-items:flex-start">
-            <div style="display:flex;gap:10px;align-items:center">
-              <input type="checkbox" class="selectBox" data-id="${p.id}"/>
+            <div style="display:flex;gap:10px;align-items:flex-start">
+              <input type="checkbox" class="selectBox" data-id="${p.id}" style="margin-top:4px"/>
               <div>
-                <div style="font-weight:800">${addr} ${pinBadge}</div>
-                <div class="small">${link}</div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <div style="font-weight:800;font-size:18px">${head}</div>
+                  ${line2}
+                  ${pinBadge}
+                </div>
+                ${sub}
+                <div class="small" style="margin-top:4px">${link}</div>
                 <div class="small">Module: ${p.module}</div>
                 <div class="small">Updated: ${new Date(p.updatedAt || p.createdAt).toLocaleString()}</div>
               </div>
@@ -77,20 +96,36 @@ document.addEventListener("DOMContentLoaded", () => {
     }).join("");
   }
 
+  // Filters & search
   moduleFilter.addEventListener("change", render);
   kpiFilter.addEventListener("change", render);
+  searchBox.addEventListener("input", render);
 
+  // Export
   exportBtn.addEventListener("click", () => {
     const catalog = getCatalog();
-    const blob = new Blob([JSON.stringify(catalog, null, 2)], {type: "application/json"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "pat_catalog.json";
-    a.click();
-    URL.revokeObjectURL(url);
+    // Reuse filtering before export
+    const q = (searchBox.value || "").toLowerCase().trim();
+    const mod = moduleFilter.value;
+    const kpi = kpiFilter.value;
+    let props = catalog.properties || [];
+    if(mod) props = props.filter(p => p.module === mod);
+    if(kpi) props = props.filter(p => [p.bands?.cashOnCash, p.bands?.capRate, p.bands?.dscr].includes(kpi));
+    if(q) props = props.filter(p => parseAddress(p?.source?.address||"").line1.toLowerCase().includes(q));
+
+    const which = exportSelect.value;
+    if(which === "json"){
+      const blob = new Blob([JSON.stringify({ schemaVersion: catalog.schemaVersion, properties: props }, null, 2)], {type: "application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "pat_catalog.json"; a.click();
+      URL.revokeObjectURL(url);
+    } else if(which === "pdf"){
+      openPrintableCatalogue(props); // print dialog → Save as PDF
+    }
   });
 
+  // Pin / Delete
   pinBtn.addEventListener("click", () => {
     const catalog = getCatalog();
     const checks = [...document.querySelectorAll(".selectBox:checked")].map(cb => cb.dataset.id);
