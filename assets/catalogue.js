@@ -35,17 +35,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function applyCompactModeIfNeeded() {
-    // measure controls section height (first .card on the page)
     const controls = document.querySelector("section.card");
     const controlsH = controls ? controls.getBoundingClientRect().height : 120;
 
-    // Compute min height for property cards as 1.5 × controls card height
     const minH = Math.max(180, Math.round(1.5 * controlsH));
     document.documentElement.style.setProperty("--prop-min-h", `${minH}px`);
 
-    // If the list of property cards extends beyond viewport, enable compact mode.
     const listH = document.body.getBoundingClientRect().height;
-    const overflow = listH > window.innerHeight + 24; // small buffer
+    const overflow = listH > window.innerHeight + 24;
     if (overflow) {
       document.body.classList.add("compact");
     } else {
@@ -66,11 +63,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const addr = parseAddress(p?.source?.address || "");
       const head = addr.line1 || "(No address)";
 
-      // Line2 only if it's a unit/suite/apt (avoid showing city here)
       const hasUnit = addr.line2 && /(?:apt|suite|ste|unit|#)/i.test(addr.line2);
       const line2 = hasUnit ? `<div class="small" style="opacity:.85">${addr.line2}</div>` : "";
 
-      // Country: show only if not US
       const cityStateZip = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
       const countryText = (addr.country && !/^(us|usa|united states)$/i.test(addr.country)) ? `, ${addr.country}` : "";
       const sub = cityStateZip || countryText ? `<div class="small" style="margin-top:2px">${cityStateZip}${countryText}</div>` : "";
@@ -140,6 +135,7 @@ document.addEventListener("DOMContentLoaded", () => {
       catalog.properties[idx].pinned = false;
       catalog.properties[idx].updatedAt = new Date().toISOString();
       saveCatalog(catalog);
+      showToast("Property unpinned.", "success");
       render();
     }
   });
@@ -160,32 +156,48 @@ document.addEventListener("DOMContentLoaded", () => {
       const a = document.createElement("a");
       a.href = url; a.download = "pat_catalog.json"; a.click();
       URL.revokeObjectURL(url);
+      showToast("Catalogue exported as JSON", "success");
     } else if(which === "pdf"){
-      openPrintableCatalogue(props); // print dialog → Save as PDF
+      openPrintableCatalogue(props);
+      showToast("PDF export opened in new window", "info");
     }
   });
 
   // Pin/Unpin selected
   pinToggleBtn.addEventListener("click", () => {
     const checks = [...document.querySelectorAll(".selectBox:checked")].map(cb => cb.dataset.id);
-    if(checks.length===0){ alert("Select at least one property to pin/unpin."); return; }
+    if(checks.length===0){
+      showToast("Select at least one property to pin/unpin.", "info", {title:"Nothing selected"});
+      return;
+    }
     const catalog = getCatalog();
     catalog.properties = (catalog.properties||[]).map(p => {
       if(!checks.includes(p.id)) return p;
       return { ...p, pinned: !p.pinned, updatedAt: new Date().toISOString() };
     });
     saveCatalog(catalog);
+    showToast("Pinned state updated.", "success");
     render();
   });
 
   // Delete
-  delBtn.addEventListener("click", () => {
+  delBtn.addEventListener("click", async () => {
     const checks = [...document.querySelectorAll(".selectBox:checked")].map(cb => cb.dataset.id);
-    if(checks.length===0){ alert("Select at least one property to delete."); return; }
-    if(!confirm(`Delete ${checks.length} selected propert${checks.length>1?"ies":"y"}?`)) return;
+    if(checks.length===0){
+      showToast("Select at least one property to delete.", "info", {title:"Nothing selected"});
+      return;
+    }
+    const confirmed = await showConfirm({
+      title:"Delete selected?",
+      message:`Delete ${checks.length} propert${checks.length>1?"ies":"y"} permanently?`,
+      okText:"Delete",
+      cancelText:"Cancel"
+    });
+    if(!confirmed) return;
     const catalog = getCatalog();
     catalog.properties = (catalog.properties||[]).filter(p => !checks.includes(p.id));
     saveCatalog(catalog);
+    showToast("Deleted selected properties.", "success");
     render();
   });
 
