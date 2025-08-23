@@ -1,4 +1,4 @@
-/* FRAT page behavior */
+/* FRAT page behavior — fixed Monthly/Annual toggle */
 document.addEventListener("DOMContentLoaded", () => {
   const els = {
     address: document.getElementById("address"),
@@ -15,13 +15,16 @@ document.addEventListener("DOMContentLoaded", () => {
     desiredARV: document.getElementById("desiredARV"),
     interestOnlyToggle: document.getElementById("interestOnlyToggle"),
     comments: document.getElementById("comments"),
+
     addOrSaveBtn: document.getElementById("addOrSaveBtn"),
     clearBtn: document.getElementById("clearBtn"),
+
     viewModeToggle: document.getElementById("viewModeToggle"),
     viewModeLabel: document.getElementById("viewModeLabel"),
     taxesLabel: document.getElementById("taxesLabel"),
     insuranceLabel: document.getElementById("insuranceLabel"),
     hoaLabel: document.getElementById("hoaLabel"),
+
     kpiBadges: document.getElementById("kpiBadges"),
     netIncomeBox: document.getElementById("netIncomeBox"),
     suggestedARV: document.getElementById("suggestedARV"),
@@ -29,36 +32,18 @@ document.addEventListener("DOMContentLoaded", () => {
     moreDetails: document.getElementById("moreDetails"),
   };
 
-  // --- Page Mode (Add vs Edit) ---
   const params = new URLSearchParams(location.search);
   let editId = params.get("edit");
   let isEditMode = !!editId;
+  let lastSavedSnapshot = null;
 
-  // On direct entry (not editing), clear form
+  initPlaceholders();
+
   if (!isEditMode) {
     hardResetForm();
   }
 
-  // Prevent-loss guard
-  let lastSavedSnapshot = null;
-
-  function hardResetForm() {
-    [
-      els.address, els.link, els.propertyValue, els.percentDownPct, els.rateAprPct,
-      els.loanLengthYears, els.estFixingCost, els.taxesMonthly, els.insuranceMonthly,
-      els.hoaMonthly, els.monthsHold, els.desiredARV, els.comments
-    ].forEach(el => { if (!el) return; el.value = (el.id === "loanLengthYears") ? 30 : ""; });
-    els.interestOnlyToggle.checked = false;
-    els.viewModeToggle.checked = false;
-    els.viewModeLabel.textContent = "Monthly view";
-    setCarryCostLabels("monthly");
-    lastSavedSnapshot = JSON.stringify(collectForm());
-    els.addOrSaveBtn.textContent = "Add Property to Catalogue";
-    delete els.addOrSaveBtn.dataset.dupId;
-    triggerCompute();
-  }
-
-  // Load edit data if any
+  // Load edit if present
   if (isEditMode) {
     const cat = getCatalog();
     const found = (cat.properties || []).find(p => p.id === editId);
@@ -78,31 +63,44 @@ document.addEventListener("DOMContentLoaded", () => {
       els.monthsHold.value = i.monthsHold ?? "";
       els.desiredARV.value = i.desiredARV ?? "";
       els.interestOnlyToggle.checked = !!i.interestOnly;
-      els.comments.value = i.comments || "";
+
+      // Always store/display carry costs in monthly; set toggle state accordingly
+      els.viewModeToggle.checked = false;
+      els.viewModeToggle.dataset.mode = "monthly";
+      els.viewModeLabel.textContent = "Monthly view";
+      setCarryCostLabels("monthly");
+
       lastSavedSnapshot = JSON.stringify(collectForm());
+      triggerCompute();
     } else {
-      // wrong id or module — fall back to add
       isEditMode = false;
       editId = null;
       hardResetForm();
     }
   }
 
-  // View mode toggle (monthly/annual for carry costs)
+  // ===== View mode (Monthly/Annual) — robust handler =====
   els.viewModeToggle.addEventListener("change", () => {
+    const currentMode = els.viewModeToggle.dataset.mode || "monthly";
     const toMode = els.viewModeToggle.checked ? "annual" : "monthly";
-    const fromMode = toMode === "annual" ? "monthly" : "annual";
+    if (currentMode === toMode) return;
+
     const current = {
       taxesMonthly: els.taxesMonthly.value,
       insuranceMonthly: els.insuranceMonthly.value,
       hoaMonthly: els.hoaMonthly.value
     };
-    const converted = convertCarryCosts(current, fromMode, toMode);
+    // convertCarryCosts is provided by app.js
+    const converted = convertCarryCosts(current, currentMode, toMode);
+
     els.taxesMonthly.value = converted.taxesMonthly;
     els.insuranceMonthly.value = converted.insuranceMonthly;
     els.hoaMonthly.value = converted.hoaMonthly;
-    els.viewModeLabel.textContent = toMode === "annual" ? "Annual view" : "Monthly view";
+
+    els.viewModeLabel.textContent = (toMode === "annual") ? "Annual view" : "Monthly view";
     setCarryCostLabels(toMode);
+    els.viewModeToggle.dataset.mode = toMode;
+
     triggerCompute();
   });
 
@@ -113,6 +111,28 @@ document.addEventListener("DOMContentLoaded", () => {
     els.hoaLabel.textContent = "HOA" + sfx;
   }
 
+  function hardResetForm() {
+    [
+      els.address, els.link, els.propertyValue, els.percentDownPct, els.rateAprPct,
+      els.loanLengthYears, els.estFixingCost, els.taxesMonthly, els.insuranceMonthly,
+      els.hoaMonthly, els.monthsHold, els.desiredARV, els.comments
+    ].forEach(el => { if (!el) return; el.value = (el.id === "loanLengthYears") ? 30 : ""; });
+    els.interestOnlyToggle.checked = false;
+
+    // Initialize toggle state & labels deterministically
+    els.viewModeToggle.checked = false;
+    els.viewModeToggle.dataset.mode = "monthly";
+    els.viewModeLabel.textContent = "Monthly view";
+    setCarryCostLabels("monthly");
+
+    lastSavedSnapshot = JSON.stringify(collectForm());
+
+    els.addOrSaveBtn.textContent = "Add Property to Catalogue";
+    delete els.addOrSaveBtn.dataset.dupId;
+
+    triggerCompute();
+  }
+
   // Show more/less label
   if (els.moreDetails) {
     const summary = els.moreDetails.querySelector("summary");
@@ -121,22 +141,19 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(syncLabel, 0);
   }
 
-  // Mark dirty and recompute on inputs
-  const watchedIds = ["address","link","propertyValue","percentDownPct","rateAprPct","loanLengthYears",
+  // Recompute on input
+  const watched = ["address","link","propertyValue","percentDownPct","rateAprPct","loanLengthYears",
     "estFixingCost","taxesMonthly","insuranceMonthly","hoaMonthly","monthsHold","desiredARV","comments"];
   ["input","change"].forEach(evt => {
-    watchedIds.forEach(id => {
+    watched.forEach(id => {
       const el = els[id];
       if (!el) return;
-      el.addEventListener(evt, () => {
-        checkDuplicateAddressUI();
-        triggerCompute();
-      });
+      el.addEventListener(evt, () => { checkDuplicateAddressUI(); triggerCompute(); });
     });
   });
   els.interestOnlyToggle.addEventListener("change", () => { triggerCompute(); });
 
-  // Soft confirm on nav if unsaved & KPIs valid
+  // Nav soft-confirm if unsaved with valid KPI
   document.querySelectorAll(".nav a").forEach(a => {
     a.addEventListener("click", async (e) => {
       if (shouldWarnUnsaved()) {
@@ -153,8 +170,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function collectForm() {
-    const mode = els.viewModeLabel.textContent.startsWith("Annual") ? "annual" : "monthly";
-    const raw = {
+    return {
       address: els.address.value,
       link: els.link.value,
       propertyValue: els.propertyValue.value,
@@ -170,7 +186,6 @@ document.addEventListener("DOMContentLoaded", () => {
       interestOnly: els.interestOnlyToggle.checked ? 1 : 0,
       comments: els.comments.value
     };
-    return (mode === "annual") ? convertCarryCosts(raw, "annual", "monthly") : raw;
   }
 
   function shouldWarnUnsaved() {
@@ -198,7 +213,6 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  // Duplicate address UI
   function checkDuplicateAddressUI() {
     const dup = findDuplicateByAddress(els.address.value);
     if (dup && !isEditMode) {
@@ -210,10 +224,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Compute & render
+  function initPlaceholders(){
+    els.suggestedARV.innerHTML = `
+      <tr><td>ROI 40%</td><td>N/A</td></tr>
+      <tr><td>ROI 30%</td><td>N/A</td></tr>
+      <tr><td>ROI 20%</td><td>N/A</td></tr>
+      <tr><td>ROI 10%</td><td>N/A</td></tr>`;
+    els.netIncomeBox.innerHTML = `
+      <div class="card"><div class="small">Net Income</div><div style="font-weight:800;font-size:18px">N/A</div></div>`;
+    els.kpiBadges.innerHTML = `<div class="kpi na">ROI N/A</div>`;
+  }
+
   function triggerCompute() {
-    const nums = collectNums();
-    const r = computeFRAT(nums);
+    const n = collectNums();
+    const r = computeFRAT(n);
     renderKPIs(r);
     renderNetIncome(r);
     renderSuggestedARV(r);
@@ -221,17 +245,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderKPIs(r) {
-    const roiPct = isFinite(r.roi) ? (r.roi*100).toFixed(2)+"%" : "N/A";
-    const band = bandROI(r.roi);
-    const tip = "ROI = (Desired ARV − Total Losses) / Total Losses";
-    els.kpiBadges.innerHTML = `<div class="${badgeClass(band)}" title="${tip}">ROI <span class="value">${roiPct}</span></div>`;
+  const roiPct = isFinite(r.roi) ? (r.roi*100).toFixed(2)+"%" : "N/A";
+  const band = bandROI(r.roi);
+  const tip = "ROI = (Desired ARV − Total Losses) / Total Losses";
+  els.kpiBadges.innerHTML = `<div class="${kpiClass(band)}" title="${tip}">ROI <span class="value">${roiPct}</span></div>`;
   }
 
   function renderNetIncome(r) {
     const v = isFinite(r.netIncome) ? formatMoney(r.netIncome) : "N/A";
     els.netIncomeBox.innerHTML = `
-      <div class="card"><div class="small">Net Income</div><div style="font-weight:800;font-size:18px">${v}</div></div>
-    `;
+      <div class="card"><div class="small">Net Income</div><div style="font-weight:800;font-size:18px">${v}</div></div>`;
   }
 
   function renderSuggestedARV(r) {
@@ -240,8 +263,7 @@ document.addEventListener("DOMContentLoaded", () => {
       <tr><td>ROI 40%</td><td>${cell(r.targets.arv40)}</td></tr>
       <tr><td>ROI 30%</td><td>${cell(r.targets.arv30)}</td></tr>
       <tr><td>ROI 20%</td><td>${cell(r.targets.arv20)}</td></tr>
-      <tr><td>ROI 10%</td><td>${cell(r.targets.arv10)}</td></tr>
-    `;
+      <tr><td>ROI 10%</td><td>${cell(r.targets.arv10)}</td></tr>`;
   }
 
   function renderSupplemental(r) {
@@ -250,9 +272,7 @@ document.addEventListener("DOMContentLoaded", () => {
       { label: "Down Payment", val: formatMoney(s.downPayment), tip: "Down = Property Value × Percent Down" },
       { label: "Closing Costs (5%)", val: formatMoney(s.closingCosts), tip: "Closing = Property Value × 5%" },
       { label: "Loan Amount", val: formatMoney(s.loanAmount), tip: "Loan = Property Value − Down" },
-      { label: "Mortgage (Monthly)", val: formatMoney(s.mortgageMonthly), tip: s.interestOnly
-          ? "Interest-only: Loan × (APR/12)"
-          : "PMT = r·L / (1 − (1+r)^−n)" },
+      { label: "Mortgage (Monthly)", val: formatMoney(s.mortgageMonthly), tip: s.interestOnly ? "Interest-only: Loan × (APR/12)" : "PMT = r·L / (1 − (1+r)^−n)" },
       { label: "Operating Expenses (Monthly)", val: formatMoney(s.operatingExpensesMonthly), tip: "Taxes + Insurance + HOA + Misc(1%/yr ÷ 12)" },
       { label: "Ownership Cost (Monthly)", val: formatMoney(s.ownershipCostMonthly), tip: "OpEx + Mortgage" },
       { label: "Holding Loss (Months × Ownership)", val: formatMoney(s.holdingLoss), tip: "Ownership per month × Months to hold" },
@@ -263,9 +283,9 @@ document.addEventListener("DOMContentLoaded", () => {
       { label: "Total Losses", val: formatMoney(r.totalLosses), tip: "Down + Closing + Loan (counted) + Fixing + Holding Loss" },
       { label: "Desired ARV", val: isFinite(r.desiredARV)?formatMoney(r.desiredARV):"N/A", tip: "Target resale price" }
     ];
-    els.supplemental.innerHTML = rows.map(rw =>
-      `<div class="row" style="justify-content:space-between" title="${rw.tip}">
-         <div class="small">${rw.label}</div><div>${rw.val}</div>
+    els.supplemental.innerHTML = rows.map(row =>
+      `<div class="row" style="justify-content:space-between" title="${row.tip}">
+         <div class="small">${row.label}</div><div>${row.val}</div>
        </div>`
     ).join("");
   }
@@ -278,31 +298,29 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const nums = collectNums();
-    const minimalOk = (+nums.propertyValue > 0 && +nums.percentDownPct >= 0 &&
-      +nums.rateAprPct >= 0 && +nums.monthsHold >= 0);
+    const n = collectNums();
+    const minimalOk = (+n.propertyValue > 0 && +n.percentDownPct >= 0 && +n.rateAprPct >= 0);
     if (!minimalOk) {
-      showToast("Provide at least: Property Value, Percent Down, Rate, Months Hold.", "info", { title: "Missing required inputs" });
+      showToast("Provide at least: Property Value, Percent Down, Rate.", "info", { title: "Missing required inputs" });
       return;
     }
 
-    const r = computeFRAT(nums);
-
+    const r = computeFRAT(n);
     const core = {
       module: "FRAT",
       source: { address: els.address.value || "", link: els.link.value || "", entryMode: "manual" },
       inputs: {
-        propertyValue: +nums.propertyValue,
-        percentDownPct: +nums.percentDownPct,
-        rateAprPct: +nums.rateAprPct,
-        loanLengthYears: +nums.loanLengthYears,
-        estFixingCost: +nums.estFixingCost,
-        taxesMonthly: +nums.taxesMonthly,
-        insuranceMonthly: +nums.insuranceMonthly,
-        hoaMonthly: +nums.hoaMonthly,
-        monthsHold: +nums.monthsHold,
-        desiredARV: +nums.desiredARV,
-        interestOnly: !!nums.interestOnly,
+        propertyValue: +n.propertyValue,
+        percentDownPct: +n.percentDownPct,
+        rateAprPct: +n.rateAprPct,
+        loanLengthYears: +n.loanLengthYears,
+        estFixingCost: +n.estFixingCost,
+        taxesMonthly: +n.taxesMonthly,
+        insuranceMonthly: +n.insuranceMonthly,
+        hoaMonthly: +n.hoaMonthly,
+        monthsHold: +n.monthsHold,
+        desiredARV: +n.desiredARV,
+        interestOnly: !!n.interestOnly,
         comments: els.comments.value || "",
         closingCostsRate: 0.05,
         miscRateAnnual: 0.01
@@ -320,9 +338,7 @@ document.addEventListener("DOMContentLoaded", () => {
           roi10: r.targets.arv10
         }
       },
-      bands: {
-        roi: bandROI(r.roi).label
-      }
+      bands: { roi: bandROI(r.roi).label }
     };
 
     if (isEditMode) {
@@ -344,13 +360,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // Clear
   els.clearBtn.addEventListener("click", () => { hardResetForm(); });
 
-  // Initial compute + back behavior
-  checkDuplicateAddressUI();
-  triggerCompute();
+  // Back button same as GRASP
   const backBtn = document.getElementById('backBtn');
   if (backBtn) { backBtn.addEventListener('click', (e) => { e.preventDefault(); history.back(); }); }
 
-  // ---------- Core FRAT math ----------
+  // ---------- FRAT math ----------
   function computeFRAT(n) {
     const pv = n.propertyValue || 0;
     const down = pv * ((n.percentDownPct || 0) / 100);
@@ -361,23 +375,31 @@ document.addEventListener("DOMContentLoaded", () => {
     const r = (n.rateAprPct || 0) / 100 / 12;
     const N = (n.loanLengthYears || 30) * 12;
 
-    const mortgageMonthly = n.interestOnly
-      ? loan * r
-      : (r > 0 ? (r * loan) / (1 - Math.pow(1 + r, -N)) : 0);
+    const pmtStandard = (r > 0 ? (r * loan) / (1 - Math.pow(1 + r, -N)) : 0);
+    const pmtInterestOnly = loan * r;
+    const mortgageMonthly = n.interestOnly ? pmtInterestOnly : pmtStandard;
 
     const operatingMonthly = (n.taxesMonthly || 0) + (n.insuranceMonthly || 0) + (n.hoaMonthly || 0) + miscMonthly;
     const ownershipMonthly = operatingMonthly + mortgageMonthly;
 
-    // Remaining balance after m months (if NOT interest-only)
     const m = Math.max(0, Math.floor(n.monthsHold || 0));
     let remainingBalance = loan;
-    if (!n.interestOnly && r > 0 && N > 0 && m > 0) {
-      remainingBalance = loan * Math.pow(1 + r, m) - mortgageMonthly * ( (Math.pow(1 + r, m) - 1) / r );
+    if (m > 0) {
+      if (n.interestOnly) {
+        if (m <= 12) {
+          remainingBalance = loan;
+        } else {
+          const monthsAfterIO = m - 12;
+          if (r > 0 && N > 0) {
+            remainingBalance = loan * Math.pow(1 + r, monthsAfterIO) - pmtStandard * ((Math.pow(1 + r, monthsAfterIO) - 1) / r);
+          }
+        }
+      } else if (r > 0 && N > 0) {
+        remainingBalance = loan * Math.pow(1 + r, m) - pmtStandard * ((Math.pow(1 + r, m) - 1) / r);
+      }
     }
 
-    // Loan counted in losses:
-    const loanCounted = n.interestOnly ? loan : remainingBalance;
-
+    const loanCounted = n.interestOnly && m <= 12 ? loan : remainingBalance;
     const holdingLoss = ownershipMonthly * m;
     const totalLosses = down + closing + loanCounted + (n.estFixingCost || 0) + holdingLoss;
 
@@ -385,20 +407,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const netIncome = isFinite(desiredARV) ? (desiredARV - totalLosses) : NaN;
     const roi = isFinite(netIncome) && totalLosses > 0 ? netIncome / totalLosses : NaN;
 
-    // Targets: ARV required to reach X% ROI
-    const targetARV = (roiPct) => totalLosses > 0 ? totalLosses * (1 + roiPct) : NaN;
+    const targetARV = pct => totalLosses > 0 ? totalLosses * (1 + pct) : NaN;
 
     return {
-      roi,
-      netIncome,
-      desiredARV,
-      totalLosses,
-      targets: {
-        arv40: targetARV(0.40),
-        arv30: targetARV(0.30),
-        arv20: targetARV(0.20),
-        arv10: targetARV(0.10),
-      },
+      roi, netIncome, desiredARV, totalLosses,
+      targets: { arv40: targetARV(0.40), arv30: targetARV(0.30), arv20: targetARV(0.20), arv10: targetARV(0.10) },
       supp: {
         downPayment: down,
         closingCosts: closing,
