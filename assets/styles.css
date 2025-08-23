@@ -168,3 +168,102 @@ body.compact .table th, body.compact .table td{padding:8px}
 .modal p{margin:0 0 14px 0;color:var(--muted)}
 .modal .actions{display:flex;gap:10px;justify-content:flex-end}
 .modal .btn.primary{background:linear-gradient(180deg,#2a3c6a,var(--panel-2));border-color:#2b3a60}
+
+/* ---- StartPage: FRAT looks like GRASP but “broken” until hover ---- */
+/* Default FRAT element should have: class="big-btn broken" */
+.big-btn.broken{
+  position:relative;
+  /* SAME BASE LOOK AS GRASP */
+  background:linear-gradient(180deg,#2a3c6a,var(--panel-2));
+  color:var(--text);
+  border:1px solid #2b3a60;
+  box-shadow:0 12px 28px rgba(110,168,254,.15);
+
+  /* BROKEN ACCENTS */
+  outline:2px dashed rgba(110,168,254,.55);   /* inner dashed “fracture” */
+  outline-offset:-6px;                        /* sits inside the button */
+  filter:saturate(.9) brightness(.97);        /* tiny “off” feel */
+  transform:translateY(0) skewX(-1deg);       /* slightly skewed */
+  transition:
+    background .35s ease-in-out,
+    color .25s ease-in-out,
+    border-color .25s ease-in-out,
+    box-shadow .35s ease-in-out,
+    outline-color .3s ease-in-out,
+    transform .30s ease-in-out,
+    filter .30s ease-in-out,
+    opacity .25s ease-in-out;
+  animation: brokenIdle 2.6s ease-in-out infinite;
+}
+
+/* High-contrast crack lines so they pop on dark backgrounds */
+.big-btn.broken::before,
+.big-btn.broken::after{
+  content:"";
+  position:absolute;
+  left:10%; right:10%;
+  height:0;
+  pointer-events:none;
+  border-top:2px dashed rgba(255,255,255,.25);   /* bright crack */
+  filter: drop-shadow(0 0 2px rgba(110,168,254,.4));
+  opacity:.95;
+  transition: opacity .25s ease-in-out;
+}
+.big-btn.broken::before{ top:40%; transform:rotate(-9deg); }
+.big-btn.broken::after{
+  top:60%;
+  transform:rotate(7deg);
+  border-top-color: rgba(110,168,254,.55);      /* bluish second crack */
+}
+
+/* Hover = EXACTLY GRASP hover (remove broken accents) */
+.big-btn.broken:hover{
+  /* use same lift and keep same base gradient/border/shadow as .big-btn */
+  transform:translateY(-1px);
+  outline-color: transparent;                  /* hide inner dashed outline */
+  animation:none;
+  filter:none;
+}
+.big-btn.broken:hover::before,
+.big-btn.broken:hover::after{
+  opacity:0;                                   /* hide cracks on hover */
+}
+
+/* Idle wobble for broken */
+@keyframes brokenIdle{
+  0%   { transform: translateY(0) skewX(-1deg); }
+  50%  { transform: translateY(.7px) skewX(-2deg); }
+  100% { transform: translateY(0) skewX(-1deg); }
+}
+
+/* Motion preferences */
+@media (prefers-reduced-motion: reduce){
+  .big-btn.broken{ animation:none; transition:none; }
+  .big-btn.broken::before,.big-btn.broken::after{ transition:none; }
+}
+
+/* Keyframes preserved from earlier (if used elsewhere) */
+@keyframes btnJitter{
+  0%   { transform: translate(0,0) skewX(-2deg); }
+  10%  { transform: translate(-0.5px, .4px) skewX(-2deg); }
+  20%  { transform: translate(.6px, -.3px) skewX(-2deg); }
+  30%  { transform: translate(-.4px, .5px) skewX(-2deg); }
+  40%  { transform: translate(.3px, -.2px) skewX(-2deg); }
+  50%  { transform: translate(-.6px, .2px) skewX(-2deg); }
+  60%  { transform: translate(.5px, .2px) skewX(-2deg); }
+  70%  { transform: translate(-.3px, -.4px) skewX(-2deg); }
+  80%  { transform: translate(.2px, .5px) skewX(-2deg); }
+  90%  { transform: translate(-.2px, -.2px) skewX(-2deg); }
+  100% { transform: translate(0,0) skewX(-2deg); }
+}
+@keyframes btnFlicker{
+  0%, 8%, 100% { opacity:1; }
+  9% { opacity:.8; }
+  10% { opacity:1; }
+  22% { opacity:.9; }
+  23% { opacity:1; }
+  46% { opacity:.85; }
+  47% { opacity:1; }
+  70% { opacity:.9; }
+  71% { opacity:1; }
+}

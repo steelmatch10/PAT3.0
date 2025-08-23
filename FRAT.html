@@ -6,25 +6,139 @@
   <title>PAT 3.0 — FRAT</title>
   <link rel="stylesheet" href="assets/styles.css"/>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <script defer src="assets/app.js"></script>
+  <script defer src="assets/frat.js"></script>
 </head>
 <body>
   <div class="container">
     <header class="header">
       <div class="brand">
         <div class="logo"></div>
-        <h1>FRAT <span class="small">Flipping Risk Assessment Tool</span></h1>
+        <h1>FRAT</h1>
       </div>
       <nav class="nav">
         <a class="btn" href="index.html">Home</a>
+        <a class="btn" id="backBtn" href="#">Back</a>
         <a class="btn" href="Catalogue.html">Catalogue</a>
       </nav>
     </header>
 
-    <section class="card">
-      <h2>Coming Soon</h2>
-      <p class="small">FRAT will live here. Use GRASP for rentals in the meantime.</p>
-      <div style="margin-top:10px"><a class="btn primary" href="GRASP.html">Go to GRASP</a></div>
-    </section>
+    <div class="grid two">
+      <!-- Left: inputs -->
+      <section class="card">
+        <div class="section-title">Valuation & Financing</div>
+        <div class="grid two">
+          <div class="input">
+            <label>Property Location</label>
+            <input id="address" placeholder="Street, City, State ZIP, Country"/>
+          </div>
+          <div class="input">
+            <label>Listing URL</label>
+            <input id="link" placeholder="https://…"/>
+          </div>
+          <div class="input">
+            <label>Property Value / Negotiated Value</label>
+            <input id="propertyValue" type="number" min="0" step="1" placeholder="e.g. 375000"/>
+          </div>
+          <div class="input">
+            <label>Percent Down (%)</label>
+            <input id="percentDownPct" type="number" min="0" step="0.01" placeholder="e.g. 10"/>
+          </div>
+          <div class="input">
+            <label>Rate (APR, %)</label>
+            <input id="rateAprPct" type="number" min="0" step="0.01" placeholder="e.g. 6.8"/>
+          </div>
+          <div class="input">
+            <label>Loan Length (years)</label>
+            <input id="loanLengthYears" type="number" min="1" step="1" placeholder="30"/>
+          </div>
+          <div class="input">
+            <label>Estimated Fixing Cost</label>
+            <input id="estFixingCost" type="number" min="0" step="1" placeholder="e.g. 15000"/>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="row" style="justify-content:space-between">
+          <div class="section-title">Non-Miscellaneous Operating Costs</div>
+          <label class="toggle">
+            <input id="viewModeToggle" type="checkbox"/>
+            <span class="pill"></span>
+            <span id="viewModeLabel">Monthly view</span>
+          </label>
+        </div>
+        <div class="grid three">
+          <div class="input">
+            <label id="taxesLabel">Taxes (Monthly)</label>
+            <input id="taxesMonthly" type="number" min="0" step="1"/>
+          </div>
+          <div class="input">
+            <label id="insuranceLabel">Insurance (Monthly)</label>
+            <input id="insuranceMonthly" type="number" min="0" step="1"/>
+          </div>
+          <div class="input">
+            <label id="hoaLabel">HOA (Monthly)</label>
+            <input id="hoaMonthly" type="number" min="0" step="1"/>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="section-title">Loss &amp; Recuperation Metrics</div>
+        <div class="grid three">
+          <div class="input">
+            <label>Months to Hold</label>
+            <input id="monthsHold" type="number" min="0" step="1" placeholder="e.g. 4"/>
+          </div>
+          <div class="input">
+            <label>Desired After-Repair Value (Desired ARV)</label>
+            <input id="desiredARV" type="number" min="0" step="1" placeholder="e.g. 420000"/>
+          </div>
+          <div class="input">
+            <label class="toggle" style="margin-top:22px">
+              <input id="interestOnlyToggle" type="checkbox"/>
+              <span class="pill"></span>
+              <span>First-year interest-only</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="input">
+          <label>Comments</label>
+          <textarea id="comments" rows="3" placeholder="Optional notes"></textarea>
+        </div>
+
+        <div class="row" style="justify-content:flex-end;margin-top:8px">
+          <button class="btn" id="addOrSaveBtn">Add Property to Catalogue</button>
+          <button class="btn ghost" id="clearBtn">Clear Inputs</button>
+        </div>
+      </section>
+
+      <!-- Right: outputs -->
+      <section class="card kpi-panel">
+        <div class="section-title">KPIs</div>
+        <div id="kpiBadges" class="kpi-badges"></div>
+
+        <div class="divider"></div>
+        <div class="section-title">Net Income</div>
+        <div id="netIncomeBox" class="grid two"></div>
+
+        <div class="divider"></div>
+        <div class="section-title">Suggested Re-Sale ARV</div>
+        <div class="group-box">
+          <div class="group-head">ROI targets</div>
+          <table class="table">
+            <thead><tr><th>Target</th><th>ARV Required</th></tr></thead>
+            <tbody id="suggestedARV"></tbody>
+          </table>
+        </div>
+
+        <details id="moreDetails" style="margin-top:6px">
+          <summary>Show more</summary>
+          <div id="supplemental" style="margin-top:10px"></div>
+        </details>
+      </section>
+    </div>
   </div>
 </body>
 </html>

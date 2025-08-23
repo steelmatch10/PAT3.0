@@ -17,7 +17,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let props = catalog.properties || [];
     if (mod) props = props.filter(p => p.module === mod);
-    if (kpi) props = props.filter(p => [p.bands?.cashOnCash, p.bands?.capRate, p.bands?.dscr].includes(kpi));
+
+    // Include FRAT's ROI band in KPI filter as well
+    if (kpi) props = props.filter(p =>
+      [p.bands?.cashOnCash, p.bands?.capRate, p.bands?.dscr, p.bands?.roi].includes(kpi)
+    );
+
     if (q) {
       props = props.filter(p => {
         const a = parseAddress(p?.source?.address || "");
@@ -34,6 +39,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Adjust compact mode & min card height based on viewport/controls height
   function applyCompactModeIfNeeded() {
     const controls = document.querySelector("section.card");
     const controlsH = controls ? controls.getBoundingClientRect().height : 120;
@@ -72,17 +78,68 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const link = p.source?.link ? `<a href="${p.source.link}" target="_blank">Listing</a>` : "<span class='small'>No link</span>";
 
-      const coc = p.computed?.cashOnCash;
-      const cap = p.computed?.capRate;
-      const dscr = p.computed?.dscr;
-      const bCoC = bandCoC(coc);
-      const bCap = bandCapRate(cap);
-      const bDSCR = bandDSCR(dscr);
+      // ------- KPI badges per module -------
+      let badgesHtml = "";
+      if (p.module === "FRAT") {
+        const roi = p.computed?.roi;
+        const band = (function(v){
+          if(!isFinite(v)) return {label:"N/A"};
+          if(v > 0.40) return {label:"Amazing"};
+          if(v >= 0.30) return {label:"Great"};
+          if(v >= 0.20) return {label:"Good"};
+          if(v >= 0.10) return {label:"Okay"};
+          if(v >= 0)    return {label:"Bad"};
+          return {label:"Negative"};
+        })(roi);
+        badgesHtml = `<div class="${badgeClass(band)}">ROI ${isFinite(roi)? (roi*100).toFixed(2)+"%":"N/A"}</div>`;
+      } else {
+        const coc = p.computed?.cashOnCash;
+        const cap = p.computed?.capRate;
+        const dscr = p.computed?.dscr;
+        const bCoC = bandCoC(coc);
+        const bCap = bandCapRate(cap);
+        const bDSCR = bandDSCR(dscr);
+        badgesHtml = `
+          <div class="${badgeClass(bCoC)}">CoC ${isFinite(coc)? (coc*100).toFixed(2)+"%" : "N/A"}</div>
+          <div class="${badgeClass(bCap)}">Cap ${isFinite(cap)? (cap*100).toFixed(2)+"%" : "N/A"}</div>
+          <div class="${badgeClass(bDSCR)}">DSCR ${isFinite(dscr)? dscr.toFixed(2) : "N/A"}</div>
+        `;
+      }
+
+      // ------- Details grid per module -------
+      let detailsHtml = "";
+      if (p.module === "FRAT") {
+        const monthsHold = p.inputs?.monthsHold;
+        const desiredARV = p.inputs?.desiredARV;
+        const interestOnly = !!p.inputs?.interestOnly;
+        detailsHtml = `
+          <div class="grid four">
+            <div><div class="small">Property Value</div><div>${formatMoney(p.inputs.propertyValue)}</div></div>
+            <div><div class="small">Down %</div><div>${(p.inputs.percentDownPct).toFixed(2)}%</div></div>
+            <div><div class="small">Rate</div><div>${(p.inputs.rateAprPct).toFixed(2)}%</div></div>
+            <div><div class="small">Desired ARV</div><div>${isFinite(desiredARV)?formatMoney(desiredARV):"N/A"}</div></div>
+            <div><div class="small">Months to Hold</div><div>${isFinite(monthsHold)?monthsHold:"N/A"}</div></div>
+            <div><div class="small">Interest-Only Year</div><div>${interestOnly ? "Yes" : "No"}</div></div>
+            <div><div class="small">Fixing Cost</div><div>${formatMoney(p.inputs.estFixingCost || 0)}</div></div>
+            <div><div class="small">Ownership / mo</div><div>${formatMoney(p.computed?.ownershipCostMonthly || 0)}</div></div>
+          </div>
+        `;
+      } else {
+        detailsHtml = `
+          <div class="grid four">
+            <div><div class="small">Property Value</div><div>${formatMoney(p.inputs.propertyValue)}</div></div>
+            <div><div class="small">Down %</div><div>${(p.inputs.percentDownPct).toFixed(2)}%</div></div>
+            <div><div class="small">Rate</div><div>${(p.inputs.rateAprPct).toFixed(2)}%</div></div>
+            <div><div class="small">Units × Rent</div><div>${p.inputs.bedroomsOrUnits} × ${formatMoney(p.inputs.rentPerUnitMonthly)}</div></div>
+          </div>
+        `;
+      }
 
       const pinBadge = p.pinned
         ? `<button class="badge good pinBadge" data-id="${p.id}" title="Click to unpin">Pinned</button>`
         : "";
 
+      // ------- Card template -------
       return `
         <div class="card property-card">
           <div class="row" style="justify-content:space-between;align-items:center">
@@ -101,21 +158,14 @@ document.addEventListener("DOMContentLoaded", () => {
               </div>
             </div>
             <div class="kpi-badges">
-              <div class="${badgeClass(bCoC)}">CoC ${isFinite(coc)? (coc*100).toFixed(2)+"%" : "N/A"}</div>
-              <div class="${badgeClass(bCap)}">Cap ${isFinite(cap)? (cap*100).toFixed(2)+"%" : "N/A"}</div>
-              <div class="${badgeClass(bDSCR)}">DSCR ${isFinite(dscr)? dscr.toFixed(2) : "N/A"}</div>
+              ${badgesHtml}
             </div>
           </div>
           <div class="divider"></div>
-          <div class="grid four">
-            <div><div class="small">Property Value</div><div>${formatMoney(p.inputs.propertyValue)}</div></div>
-            <div><div class="small">Down %</div><div>${(p.inputs.percentDownPct).toFixed(2)}%</div></div>
-            <div><div class="small">Rate</div><div>${(p.inputs.rateAprPct).toFixed(2)}%</div></div>
-            <div><div class="small">Units × Rent</div><div>${p.inputs.bedroomsOrUnits} × ${formatMoney(p.inputs.rentPerUnitMonthly)}</div></div>
-          </div>
+          ${detailsHtml}
           <div class="divider"></div>
           <div class="row" style="justify-content:flex-end;gap:8px">
-            <a class="btn" href="GRASP.html?edit=${p.id}">Edit</a>
+            <a class="btn" href="${p.module==='FRAT' ? 'FRAT.html' : 'GRASP.html'}?edit=${p.id}">Edit</a>
           </div>
         </div>
       `;
