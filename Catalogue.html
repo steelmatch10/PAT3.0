@@ -1,14 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PAT 3.0 — Catalogue</title>
-  <link rel="stylesheet" href="assets/styles.css"/>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap"
+    rel="stylesheet">
   <script defer src="assets/app.js"></script>
   <script defer src="assets/catalogue.js"></script>
 </head>
+
 <body>
   <div class="container">
     <header class="header">
@@ -17,16 +20,16 @@
         <h1>Catalogue</h1>
       </div>
       <nav class="nav">
-  <a class="btn" href="index.html">Home</a>
-  <a class="btn primary" href="GRASP.html">Log with GRASP</a>
-  <a class="btn primary" href="FRAT.html">Log with FRAT</a>
+        <a class="btn" href="index.html">Home</a>
+        <a class="btn primary" href="GRASP.html">Log with GRASP</a>
+        <a class="btn primary" href="FRAT.html">Log with FRAT</a>
       </nav>
     </header>
 
     <section class="card">
       <div class="row" style="justify-content:space-between">
         <div class="row" style="gap:8px">
-          <input class="input" id="searchBox" placeholder="Search by street address…" style="min-width:240px"/>
+          <input class="input" id="searchBox" placeholder="Search by street address…" style="min-width:240px" />
           <select id="moduleFilter" class="input" style="min-width:160px">
             <option value="">All Modules</option>
             <option value="GRASP">GRASP</option>
@@ -57,4 +60,5 @@
     <section id="cards" class="grid one" style="margin-top:16px"></section>
   </div>
 </body>
+
 </html>

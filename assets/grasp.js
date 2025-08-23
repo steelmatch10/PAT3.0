@@ -31,8 +31,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // --- Carry-cost view mode state (monthly|annual) ---
-  function getCarryMode(){ return document.body.dataset.carryMode === "annual" ? "annual" : "monthly"; }
-  function setCarryMode(mode){ document.body.dataset.carryMode = (mode === "annual" ? "annual" : "monthly"); }
+  function getCarryMode() { return document.body.dataset.carryMode === "annual" ? "annual" : "monthly"; }
+  function setCarryMode(mode) { document.body.dataset.carryMode = (mode === "annual" ? "annual" : "monthly"); }
 
   // --- Page Mode (Add vs Edit) ---
   const params = new URLSearchParams(location.search);
@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const startMode = (saved === "annual") ? "annual" : "monthly";
     setCarryMode(startMode);                      // <body data-carry-mode="...">
     if (els.viewModeToggle) els.viewModeToggle.checked = (startMode === "annual");
-    if (els.viewModeLabel)  els.viewModeLabel.textContent = (startMode === "annual") ? "Annual view" : "Monthly view";
+    if (els.viewModeLabel) els.viewModeLabel.textContent = (startMode === "annual") ? "Annual view" : "Monthly view";
     setCarryCostLabels(startMode);
   }
 
@@ -436,11 +436,11 @@ document.addEventListener("DOMContentLoaded", () => {
   triggerCompute();
 
   // ----- Custom Back/Forward Guard via History API -----
-  const historyGuard = (function(){
+  const historyGuard = (function () {
     let guardInstalled = false;
     let restoring = false; // avoid loops when re-pushing trap
 
-    function installGuard(){
+    function installGuard() {
       if (guardInstalled) return;
       if (!shouldWarnUnsaved()) return;
       guardInstalled = true;
@@ -451,16 +451,16 @@ document.addEventListener("DOMContentLoaded", () => {
       window.addEventListener("popstate", onPopState);
     }
 
-    function uninstallGuard(){
+    function uninstallGuard() {
       if (!guardInstalled) return;
       window.removeEventListener("popstate", onPopState);
       guardInstalled = false;
     }
 
-    async function onPopState(ev){
-      if (restoring){ restoring = false; return; }
+    async function onPopState(ev) {
+      if (restoring) { restoring = false; return; }
 
-      if (!shouldWarnUnsaved()){
+      if (!shouldWarnUnsaved()) {
         uninstallGuard();
         history.back();
         return;
@@ -473,7 +473,7 @@ document.addEventListener("DOMContentLoaded", () => {
         cancelText: "Go back"
       });
 
-      if (ok){
+      if (ok) {
         uninstallGuard();
         history.back();
       } else {
@@ -482,7 +482,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    function tryInstallOrUninstall(){
+    function tryInstallOrUninstall() {
       if (shouldWarnUnsaved()) installGuard();
       else uninstallGuard();
     }

@@ -32,9 +32,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return props;
   }
 
-  function sortForDisplay(arr){
-    return [...arr].sort((a,b)=>{
-      if((b.pinned?1:0)!==(a.pinned?1:0)) return (b.pinned?1:0)-(a.pinned?1:0);
+  function sortForDisplay(arr) {
+    return [...arr].sort((a, b) => {
+      if ((b.pinned ? 1 : 0) !== (a.pinned ? 1 : 0)) return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
       return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
     });
   }
@@ -56,10 +56,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function render(){
+  function render() {
     const props = sortForDisplay(filteredProps());
 
-    if(props.length===0){
+    if (props.length === 0) {
       cards.innerHTML = `<div class="card"><div class="small">No properties match your filters.</div></div>`;
       applyCompactModeIfNeeded();
       return;
@@ -82,16 +82,16 @@ document.addEventListener("DOMContentLoaded", () => {
       let badgesHtml = "";
       if (p.module === "FRAT") {
         const roi = p.computed?.roi;
-        const band = (function(v){
-          if(!isFinite(v)) return {label:"N/A"};
-          if(v > 0.40) return {label:"Amazing"};
-          if(v >= 0.30) return {label:"Great"};
-          if(v >= 0.20) return {label:"Good"};
-          if(v >= 0.10) return {label:"Okay"};
-          if(v >= 0)    return {label:"Bad"};
-          return {label:"Negative"};
+        const band = (function (v) {
+          if (!isFinite(v)) return { label: "N/A" };
+          if (v > 0.40) return { label: "Amazing" };
+          if (v >= 0.30) return { label: "Great" };
+          if (v >= 0.20) return { label: "Good" };
+          if (v >= 0.10) return { label: "Okay" };
+          if (v >= 0) return { label: "Bad" };
+          return { label: "Negative" };
         })(roi);
-        badgesHtml = `<div class="${badgeClass(band)}">ROI ${isFinite(roi)? (roi*100).toFixed(2)+"%":"N/A"}</div>`;
+        badgesHtml = `<div class="${badgeClass(band)}">ROI ${isFinite(roi) ? (roi * 100).toFixed(2) + "%" : "N/A"}</div>`;
       } else {
         const coc = p.computed?.cashOnCash;
         const cap = p.computed?.capRate;
@@ -100,9 +100,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const bCap = bandCapRate(cap);
         const bDSCR = bandDSCR(dscr);
         badgesHtml = `
-          <div class="${badgeClass(bCoC)}">CoC ${isFinite(coc)? (coc*100).toFixed(2)+"%" : "N/A"}</div>
-          <div class="${badgeClass(bCap)}">Cap ${isFinite(cap)? (cap*100).toFixed(2)+"%" : "N/A"}</div>
-          <div class="${badgeClass(bDSCR)}">DSCR ${isFinite(dscr)? dscr.toFixed(2) : "N/A"}</div>
+          <div class="${badgeClass(bCoC)}">CoC ${isFinite(coc) ? (coc * 100).toFixed(2) + "%" : "N/A"}</div>
+          <div class="${badgeClass(bCap)}">Cap ${isFinite(cap) ? (cap * 100).toFixed(2) + "%" : "N/A"}</div>
+          <div class="${badgeClass(bDSCR)}">DSCR ${isFinite(dscr) ? dscr.toFixed(2) : "N/A"}</div>
         `;
       }
 
@@ -117,8 +117,8 @@ document.addEventListener("DOMContentLoaded", () => {
             <div><div class="small">Property Value</div><div>${formatMoney(p.inputs.propertyValue)}</div></div>
             <div><div class="small">Down %</div><div>${(p.inputs.percentDownPct).toFixed(2)}%</div></div>
             <div><div class="small">Rate</div><div>${(p.inputs.rateAprPct).toFixed(2)}%</div></div>
-            <div><div class="small">Desired ARV</div><div>${isFinite(desiredARV)?formatMoney(desiredARV):"N/A"}</div></div>
-            <div><div class="small">Months to Hold</div><div>${isFinite(monthsHold)?monthsHold:"N/A"}</div></div>
+            <div><div class="small">Desired ARV</div><div>${isFinite(desiredARV) ? formatMoney(desiredARV) : "N/A"}</div></div>
+            <div><div class="small">Months to Hold</div><div>${isFinite(monthsHold) ? monthsHold : "N/A"}</div></div>
             <div><div class="small">Interest-Only Year</div><div>${interestOnly ? "Yes" : "No"}</div></div>
             <div><div class="small">Fixing Cost</div><div>${formatMoney(p.inputs.estFixingCost || 0)}</div></div>
             <div><div class="small">Ownership / mo</div><div>${formatMoney(p.computed?.ownershipCostMonthly || 0)}</div></div>
@@ -165,7 +165,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ${detailsHtml}
           <div class="divider"></div>
           <div class="row" style="justify-content:flex-end;gap:8px">
-            <a class="btn" href="${p.module==='FRAT' ? 'FRAT.html' : 'GRASP.html'}?edit=${p.id}">Edit</a>
+            <a class="btn" href="${p.module === 'FRAT' ? 'FRAT.html' : 'GRASP.html'}?edit=${p.id}">Edit</a>
           </div>
         </div>
       `;
@@ -177,10 +177,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Click Pinned badge to unpin
   cards.addEventListener("click", (e) => {
     const btn = e.target.closest(".pinBadge");
-    if(!btn) return;
+    if (!btn) return;
     const id = btn.dataset.id;
     const catalog = getCatalog();
-    const idx = (catalog.properties||[]).findIndex(p => p.id === id);
+    const idx = (catalog.properties || []).findIndex(p => p.id === id);
     if (idx >= 0) {
       catalog.properties[idx].pinned = false;
       catalog.properties[idx].updatedAt = new Date().toISOString();
@@ -200,14 +200,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const catalog = getCatalog();
     let props = filteredProps();
     const which = exportSelect.value;
-    if(which === "json"){
-      const blob = new Blob([JSON.stringify({ schemaVersion: catalog.schemaVersion, properties: props }, null, 2)], {type: "application/json"});
+    if (which === "json") {
+      const blob = new Blob([JSON.stringify({ schemaVersion: catalog.schemaVersion, properties: props }, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = "pat_catalog.json"; a.click();
       URL.revokeObjectURL(url);
       showToast("Catalogue exported as JSON", "success");
-    } else if(which === "pdf"){
+    } else if (which === "pdf") {
       openPrintableCatalogue(props);
       showToast("PDF export opened in new window", "info");
     }
@@ -216,13 +216,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // Pin/Unpin selected
   pinToggleBtn.addEventListener("click", () => {
     const checks = [...document.querySelectorAll(".selectBox:checked")].map(cb => cb.dataset.id);
-    if(checks.length===0){
-      showToast("Select at least one property to pin/unpin.", "info", {title:"Nothing selected"});
+    if (checks.length === 0) {
+      showToast("Select at least one property to pin/unpin.", "info", { title: "Nothing selected" });
       return;
     }
     const catalog = getCatalog();
-    catalog.properties = (catalog.properties||[]).map(p => {
-      if(!checks.includes(p.id)) return p;
+    catalog.properties = (catalog.properties || []).map(p => {
+      if (!checks.includes(p.id)) return p;
       return { ...p, pinned: !p.pinned, updatedAt: new Date().toISOString() };
     });
     saveCatalog(catalog);
@@ -233,19 +233,19 @@ document.addEventListener("DOMContentLoaded", () => {
   // Delete
   delBtn.addEventListener("click", async () => {
     const checks = [...document.querySelectorAll(".selectBox:checked")].map(cb => cb.dataset.id);
-    if(checks.length===0){
-      showToast("Select at least one property to delete.", "info", {title:"Nothing selected"});
+    if (checks.length === 0) {
+      showToast("Select at least one property to delete.", "info", { title: "Nothing selected" });
       return;
     }
     const confirmed = await showConfirm({
-      title:"Delete selected?",
-      message:`Delete ${checks.length} propert${checks.length>1?"ies":"y"} permanently?`,
-      okText:"Delete",
-      cancelText:"Cancel"
+      title: "Delete selected?",
+      message: `Delete ${checks.length} propert${checks.length > 1 ? "ies" : "y"} permanently?`,
+      okText: "Delete",
+      cancelText: "Cancel"
     });
-    if(!confirmed) return;
+    if (!confirmed) return;
     const catalog = getCatalog();
-    catalog.properties = (catalog.properties||[]).filter(p => !checks.includes(p.id));
+    catalog.properties = (catalog.properties || []).filter(p => !checks.includes(p.id));
     saveCatalog(catalog);
     showToast("Deleted selected properties.", "success");
     render();

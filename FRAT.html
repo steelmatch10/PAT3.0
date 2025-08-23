@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PAT 3.0 — FRAT</title>
-  <link rel="stylesheet" href="assets/styles.css"/>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap"
+    rel="stylesheet">
   <!-- Load shared utilities first, then page script -->
   <script defer src="assets/app.js"></script>
   <script defer src="assets/frat.js"></script>
 </head>
+
 <body>
   <div class="container">
     <header class="header">
@@ -132,8 +135,8 @@
       </div>
 
       <aside class="card kpi-panel">
-  <h2>KPIs</h2>
-  <div class="kpi-badges" id="kpiBadges"></div>
+        <h2>KPIs</h2>
+        <div class="kpi-badges" id="kpiBadges"></div>
 
         <div class="divider"></div>
         <div>
@@ -147,7 +150,12 @@
           <div class="group-box">
             <div class="group-head">ROI targets</div>
             <table class="table" style="margin-top:6px">
-              <thead><tr><th>Target</th><th>ARV Required</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Target</th>
+                  <th>ARV Required</th>
+                </tr>
+              </thead>
               <tbody id="suggestedARV"></tbody>
             </table>
           </div>
@@ -164,7 +172,8 @@
 
   <script>
     // Back behavior (match GRASP)
-    document.getElementById('backBtn').addEventListener('click', (e)=>{ e.preventDefault(); history.back(); });
+    document.getElementById('backBtn').addEventListener('click', (e) => { e.preventDefault(); history.back(); });
   </script>
 </body>
+
 </html>

@@ -142,9 +142,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Recompute on input
-  const watched = ["address","link","propertyValue","percentDownPct","rateAprPct","loanLengthYears",
-    "estFixingCost","taxesMonthly","insuranceMonthly","hoaMonthly","monthsHold","desiredARV","comments"];
-  ["input","change"].forEach(evt => {
+  const watched = ["address", "link", "propertyValue", "percentDownPct", "rateAprPct", "loanLengthYears",
+    "estFixingCost", "taxesMonthly", "insuranceMonthly", "hoaMonthly", "monthsHold", "desiredARV", "comments"];
+  ["input", "change"].forEach(evt => {
     watched.forEach(id => {
       const el = els[id];
       if (!el) return;
@@ -224,7 +224,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function initPlaceholders(){
+  function initPlaceholders() {
     els.suggestedARV.innerHTML = `
       <tr><td>ROI 40%</td><td>N/A</td></tr>
       <tr><td>ROI 30%</td><td>N/A</td></tr>
@@ -245,10 +245,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderKPIs(r) {
-  const roiPct = isFinite(r.roi) ? (r.roi*100).toFixed(2)+"%" : "N/A";
-  const band = bandROI(r.roi);
-  const tip = "ROI = (Desired ARV − Total Losses) / Total Losses";
-  els.kpiBadges.innerHTML = `<div class="${kpiClass(band)}" title="${tip}">ROI <span class="value">${roiPct}</span></div>`;
+    const roiPct = isFinite(r.roi) ? (r.roi * 100).toFixed(2) + "%" : "N/A";
+    const band = bandROI(r.roi);
+    const tip = "ROI = (Desired ARV − Total Losses) / Total Losses";
+    els.kpiBadges.innerHTML = `<div class="${kpiClass(band)}" title="${tip}">ROI <span class="value">${roiPct}</span></div>`;
   }
 
   function renderNetIncome(r) {
@@ -276,12 +276,14 @@ document.addEventListener("DOMContentLoaded", () => {
       { label: "Operating Expenses (Monthly)", val: formatMoney(s.operatingExpensesMonthly), tip: "Taxes + Insurance + HOA + Misc(1%/yr ÷ 12)" },
       { label: "Ownership Cost (Monthly)", val: formatMoney(s.ownershipCostMonthly), tip: "OpEx + Mortgage" },
       { label: "Holding Loss (Months × Ownership)", val: formatMoney(s.holdingLoss), tip: "Ownership per month × Months to hold" },
-      { label: s.interestOnly ? "Initial Loan Amount counted in Losses" : "Remaining Loan Amount counted in Losses",
+      {
+        label: s.interestOnly ? "Initial Loan Amount counted in Losses" : "Remaining Loan Amount counted in Losses",
         val: formatMoney(s.loanCountedInLosses),
-        tip: s.interestOnly ? "Using initial loan due to interest-only scenario" : "Remaining balance after N months" },
+        tip: s.interestOnly ? "Using initial loan due to interest-only scenario" : "Remaining balance after N months"
+      },
       { label: "Estimated Fixing Cost", val: formatMoney(s.estFixingCost), tip: "As entered" },
       { label: "Total Losses", val: formatMoney(r.totalLosses), tip: "Down + Closing + Loan (counted) + Fixing + Holding Loss" },
-      { label: "Desired ARV", val: isFinite(r.desiredARV)?formatMoney(r.desiredARV):"N/A", tip: "Target resale price" }
+      { label: "Desired ARV", val: isFinite(r.desiredARV) ? formatMoney(r.desiredARV) : "N/A", tip: "Target resale price" }
     ];
     els.supplemental.innerHTML = rows.map(row =>
       `<div class="row" style="justify-content:space-between" title="${row.tip}">
@@ -427,13 +429,13 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  function bandROI(v){
-    if(!isFinite(v)) return {label:"N/A"};
-    if(v > 0.40) return {label:"Amazing"};
-    if(v >= 0.30) return {label:"Great"};
-    if(v >= 0.20) return {label:"Good"};
-    if(v >= 0.10) return {label:"Okay"};
-    if(v >= 0)    return {label:"Bad"};
-    return {label:"Negative"};
+  function bandROI(v) {
+    if (!isFinite(v)) return { label: "N/A" };
+    if (v > 0.40) return { label: "Amazing" };
+    if (v >= 0.30) return { label: "Great" };
+    if (v >= 0.20) return { label: "Good" };
+    if (v >= 0.10) return { label: "Okay" };
+    if (v >= 0) return { label: "Bad" };
+    return { label: "Negative" };
   }
 });
