@@ -1,35 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PAT 3.0 — Catalogue</title>
-  <link rel="stylesheet" href="assets/styles.css"/>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap"
+    rel="stylesheet">
   <script defer src="assets/app.js"></script>
   <script defer src="assets/catalogue.js"></script>
 </head>
+
 <body>
   <div class="container">
     <header class="header">
       <div class="brand">
         <div class="logo"></div>
-        <h1>Catalogue <span class="small">Properties</span></h1>
+        <h1>Catalogue</h1>
       </div>
       <nav class="nav">
         <a class="btn" href="index.html">Home</a>
         <a class="btn primary" href="GRASP.html">Log with GRASP</a>
+        <a class="btn primary" href="FRAT.html">Log with FRAT</a>
       </nav>
     </header>
 
-    <section class="card">
+  <section class="card" style="position:sticky;top:0;z-index:2;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:2px solid #4a7fcf;">
       <div class="row" style="justify-content:space-between">
         <div class="row" style="gap:8px">
-          <select id="moduleFilter" class="input" style="min-width:180px">
+          <input class="input" id="searchBox" placeholder="Search by street address…" style="min-width:240px" />
+          <select id="moduleFilter" class="input" style="min-width:160px">
             <option value="">All Modules</option>
             <option value="GRASP">GRASP</option>
             <option value="FRAT">FRAT</option>
           </select>
-          <select id="kpiFilter" class="input" style="min-width:180px">
+          <select id="kpiFilter" class="input" style="min-width:160px">
             <option value="">Any KPI band</option>
             <option value="Great">Great</option>
             <option value="Good">Good</option>
@@ -40,14 +46,19 @@
           </select>
         </div>
         <div class="row" style="gap:8px">
-          <button class="btn" id="exportBtn">Export JSON</button>
-          <button class="btn" id="pinSelectedBtn">Pin Selected</button>
+          <select id="exportSelect" class="input" style="min-width:140px">
+            <option value="json">Export: JSON</option>
+            <option value="pdf">Export: PDF</option>
+          </select>
+          <button class="btn" id="exportBtn">Export</button>
+          <button class="btn" id="pinToggleBtn">Pin/Unpin Selected</button>
           <button class="btn ghost" id="deleteSelectedBtn">Delete Selected</button>
         </div>
       </div>
     </section>
 
-    <section id="cards" class="grid two" style="margin-top:16px"></section>
+    <section id="cards" class="grid one" style="margin-top:16px"></section>
   </div>
 </body>
+
 </html>
