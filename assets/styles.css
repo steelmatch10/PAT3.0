@@ -1,3 +1,6 @@
+.pinBadge {
+  color: #fff !important;
+}
 :root {
   --bg: #0e1220;
   --panel: #141a2a;
@@ -200,22 +203,26 @@ h2 {
   vertical-align: middle;
 }
 
+
 .kpi-badges {
   display: flex;
   gap: 10px;
-  flex-wrap: wrap
+  flex-wrap: wrap;
 }
 
-.kpi {
+
+.kpi,
+.kpi-badges .badge {
   padding: 10px 12px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--chip);
-  font-weight: 700
+  font-weight: 600;
+  font-size: 16px;
 }
 
 .kpi .value {
-  font-variant-numeric: tabular-nums
+  font-variant-numeric: tabular-nums;
 }
 
 .kpi.great {

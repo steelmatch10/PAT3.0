@@ -112,25 +112,31 @@ document.addEventListener("DOMContentLoaded", () => {
         const monthsHold = p.inputs?.monthsHold;
         const desiredARV = p.inputs?.desiredARV;
         const interestOnly = !!p.inputs?.interestOnly;
+        const netIncome = p.computed?.netIncome;
         detailsHtml = `
-          <div class="grid four">
-            <div><div class="small">Property Value</div><div>${formatMoney(p.inputs.propertyValue)}</div></div>
-            <div><div class="small">Down %</div><div>${(p.inputs.percentDownPct).toFixed(2)}%</div></div>
-            <div><div class="small">Rate</div><div>${(p.inputs.rateAprPct).toFixed(2)}%</div></div>
-            <div><div class="small">Desired ARV</div><div>${isFinite(desiredARV) ? formatMoney(desiredARV) : "N/A"}</div></div>
-            <div><div class="small">Months to Hold</div><div>${isFinite(monthsHold) ? monthsHold : "N/A"}</div></div>
-            <div><div class="small">Interest-Only Year</div><div>${interestOnly ? "Yes" : "No"}</div></div>
-            <div><div class="small">Fixing Cost</div><div>${formatMoney(p.inputs.estFixingCost || 0)}</div></div>
-            <div><div class="small">Ownership / mo</div><div>${formatMoney(p.computed?.ownershipCostMonthly || 0)}</div></div>
+          <div style="display:flex;flex-direction:row;justify-content:space-between;align-items:center;width:100%;gap:0;">
+            <div style="flex:1;text-align:center;"><div class="small">Property Value</div><div>${formatMoney(p.inputs.propertyValue)}</div></div>
+            <div style="flex:1;text-align:center;"><div class="small">Fixing Cost</div><div>${formatMoney(p.inputs.estFixingCost || 0)}</div></div>
+            <div style="flex:1;text-align:center;"><div class="small">Months to Market</div><div>${isFinite(monthsHold) ? monthsHold : "N/A"}</div></div>
+            <div style="flex:1;text-align:center;"><div class="small">Interest-Only First Year</div><div>${interestOnly ? "Yes" : "No"}</div></div>
+            <div style="flex:1;text-align:center;"><div class="small">Desired ARV</div><div>${isFinite(desiredARV) ? formatMoney(desiredARV) : "N/A"}</div></div>
+            <div style="flex:1;text-align:center;"><div class="small">Net Income</div><div>${isFinite(netIncome) ? formatMoney(netIncome) : "N/A"}</div></div>
           </div>
         `;
       } else {
+        // Calculate Total Initial Investment
+        const downPayment = Number(p.inputs.propertyValue) * (Number(p.inputs.percentDownPct) / 100);
+        const closingCosts = Number(p.inputs.propertyValue) * 0.05;
+        const improvementCost = Number(p.inputs.estImprovementCost) || 0;
+        const totalInitial = downPayment + closingCosts + improvementCost;
+        const grossRentMonthly = p.computed?.grossRentMonthly;
+        const annualCashFlow = p.computed?.annualCashFlow;
         detailsHtml = `
-          <div class="grid four">
-            <div><div class="small">Property Value</div><div>${formatMoney(p.inputs.propertyValue)}</div></div>
-            <div><div class="small">Down %</div><div>${(p.inputs.percentDownPct).toFixed(2)}%</div></div>
-            <div><div class="small">Rate</div><div>${(p.inputs.rateAprPct).toFixed(2)}%</div></div>
-            <div><div class="small">Units × Rent</div><div>${p.inputs.bedroomsOrUnits} × ${formatMoney(p.inputs.rentPerUnitMonthly)}</div></div>
+          <div style="display:flex;flex-direction:row;justify-content:space-between;align-items:center;width:100%;gap:0;">
+            <div style="flex:1;text-align:center;"><div class="small">Property Value</div><div>${formatMoney(p.inputs.propertyValue)}</div></div>
+            <div style="flex:1;text-align:center;"><div class="small">Total Initial Investment</div><div>${formatMoney(totalInitial)}</div></div>
+            <div style="flex:1;text-align:center;"><div class="small">Gross Rent (Monthly)</div><div>${isFinite(grossRentMonthly) ? formatMoney(grossRentMonthly) : "N/A"}</div></div>
+            <div style="flex:1;text-align:center;"><div class="small">Annual Cash Flow</div><div>${isFinite(annualCashFlow) ? formatMoney(annualCashFlow) : "N/A"}</div></div>
           </div>
         `;
       }
