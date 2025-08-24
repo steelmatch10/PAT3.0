@@ -198,15 +198,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function collectNums() {
     const f = collectForm();
+    // Normalize carry costs to monthly for calculations, regardless of toggle
+    let taxesMonthly = +f.taxesMonthly;
+    let insuranceMonthly = +f.insuranceMonthly;
+    let hoaMonthly = +f.hoaMonthly;
+    const mode = els.viewModeToggle.dataset.mode || "monthly";
+    if (mode === "annual") {
+      taxesMonthly = taxesMonthly / 12;
+      insuranceMonthly = insuranceMonthly / 12;
+      hoaMonthly = hoaMonthly / 12;
+    }
     return {
       propertyValue: +f.propertyValue,
       percentDownPct: +f.percentDownPct,
       rateAprPct: +f.rateAprPct,
       loanLengthYears: +(f.loanLengthYears || 30),
       estFixingCost: +f.estFixingCost,
-      taxesMonthly: +f.taxesMonthly,
-      insuranceMonthly: +f.insuranceMonthly,
-      hoaMonthly: +f.hoaMonthly,
+      taxesMonthly,
+      insuranceMonthly,
+      hoaMonthly,
       monthsHold: +f.monthsHold,
       desiredARV: +f.desiredARV,
       interestOnly: !!(+f.interestOnly),
@@ -282,8 +292,7 @@ document.addEventListener("DOMContentLoaded", () => {
         tip: s.interestOnly ? "Using initial loan due to interest-only scenario" : "Remaining balance after N months"
       },
       { label: "Estimated Fixing Cost", val: formatMoney(s.estFixingCost), tip: "As entered" },
-      { label: "Total Losses", val: formatMoney(r.totalLosses), tip: "Down + Closing + Loan (counted) + Fixing + Holding Loss" },
-      { label: "Desired ARV", val: isFinite(r.desiredARV) ? formatMoney(r.desiredARV) : "N/A", tip: "Target resale price" }
+      { label: "Total Losses", val: formatMoney(r.totalLosses), tip: "Down + Closing + Loan (counted) + Fixing + Holding Loss" }
     ];
     els.supplemental.innerHTML = rows.map(row =>
       `<div class="row" style="justify-content:space-between" title="${row.tip}">
@@ -368,21 +377,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ---------- FRAT math ----------
   function computeFRAT(n) {
-    const pv = n.propertyValue || 0;
-    const down = pv * ((n.percentDownPct || 0) / 100);
-    const loan = Math.max(pv - down, 0);
-    const closing = pv * 0.05;
-    const miscMonthly = pv * 0.01 / 12;
+  const pv = n.propertyValue || 0;
+  const down = pv * ((n.percentDownPct || 0) / 100);
+  const loan = Math.max(pv - down, 0);
+  const closing = pv * 0.05;
+  const miscMonthly = pv * 0.01 / 12;
 
-    const r = (n.rateAprPct || 0) / 100 / 12;
-    const N = (n.loanLengthYears || 30) * 12;
+  // Ensure all values are monthly
+  const taxesMonthly = n.taxesMonthly || 0;
+  const insuranceMonthly = n.insuranceMonthly || 0;
+  const hoaMonthly = n.hoaMonthly || 0;
 
-    const pmtStandard = (r > 0 ? (r * loan) / (1 - Math.pow(1 + r, -N)) : 0);
-    const pmtInterestOnly = loan * r;
-    const mortgageMonthly = n.interestOnly ? pmtInterestOnly : pmtStandard;
+  const r = (n.rateAprPct || 0) / 100 / 12;
+  const N = (n.loanLengthYears || 30) * 12;
 
-    const operatingMonthly = (n.taxesMonthly || 0) + (n.insuranceMonthly || 0) + (n.hoaMonthly || 0) + miscMonthly;
-    const ownershipMonthly = operatingMonthly + mortgageMonthly;
+  const pmtStandard = (r > 0 ? (r * loan) / (1 - Math.pow(1 + r, -N)) : 0);
+  const pmtInterestOnly = loan * r;
+  const mortgageMonthly = n.interestOnly ? pmtInterestOnly : pmtStandard;
+
+  // Use only monthly values for operating expenses
+  const operatingMonthly = taxesMonthly + insuranceMonthly + hoaMonthly + miscMonthly;
+  const ownershipMonthly = operatingMonthly + mortgageMonthly;
 
     const m = Math.max(0, Math.floor(n.monthsHold || 0));
     let remainingBalance = loan;
