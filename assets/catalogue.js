@@ -2,7 +2,6 @@
 document.addEventListener("DOMContentLoaded", () => {
   const cards = document.getElementById("cards");
   const moduleFilter = document.getElementById("moduleFilter");
-  const kpiFilter = document.getElementById("kpiFilter");
   const searchBox = document.getElementById("searchBox");
   const exportBtn = document.getElementById("exportBtn");
   const importBtn = document.getElementById("importBtn");
@@ -77,16 +76,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const catalog = getCatalog();
     const q = (searchBox.value || "").toLowerCase().trim();
     const mod = moduleFilter.value;
-    const kpi = kpiFilter.value;
-
     let props = catalog.properties || [];
     if (mod) props = props.filter(p => p.module === mod);
-
-    // Include FRAT's ROI band in KPI filter as well
-    if (kpi) props = props.filter(p =>
-      [p.bands?.cashOnCash, p.bands?.capRate, p.bands?.dscr, p.bands?.roi].includes(kpi)
-    );
-
     if (q) {
       props = props.filter(p => {
         const a = parseAddress(p?.source?.address || "");
@@ -265,7 +256,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Filters & search
   moduleFilter.addEventListener("change", render);
-  kpiFilter.addEventListener("change", render);
   searchBox.addEventListener("input", render);
 
   // Export
