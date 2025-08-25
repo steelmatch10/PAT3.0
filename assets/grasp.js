@@ -410,10 +410,18 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     if (isEditMode) {
-      updatePropertyInCatalog(editId, (prev) => ({ ...prev, ...propCore }));
+      const snap = JSON.stringify(collectForm());
+      if (lastSavedSnapshot === snap) {
+        showToast("No Changes Made", "info");
+        return;
+      }
+      updatePropertyInCatalog(editId, (prev) => ({ ...prev, ...propCore, updatedAt: new Date().toISOString() }));
       showToast("Changes saved.", "success");
-      lastSavedSnapshot = JSON.stringify(collectForm());
+      lastSavedSnapshot = snap;
       isDirty = false;
+      // Navigate to catalogue and show updated property at top
+      window.location.href = "Catalogue.html";
+      return;
     } else {
       const newId = (crypto.randomUUID ? crypto.randomUUID() : (String(Date.now()) + Math.random().toString(16).slice(2)));
       const prop = { id: newId, createdAt: new Date().toISOString(), pinned: false, ...propCore };

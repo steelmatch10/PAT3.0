@@ -5,9 +5,73 @@ document.addEventListener("DOMContentLoaded", () => {
   const kpiFilter = document.getElementById("kpiFilter");
   const searchBox = document.getElementById("searchBox");
   const exportBtn = document.getElementById("exportBtn");
+  const importBtn = document.getElementById("importBtn");
+  const importModal = document.getElementById("importModal");
+  const importFile = document.getElementById("importFile");
+  const importText = document.getElementById("importText");
+  const importCancel = document.getElementById("importCancel");
+  const importConfirm = document.getElementById("importConfirm");
   const exportSelect = document.getElementById("exportSelect");
   const pinToggleBtn = document.getElementById("pinToggleBtn");
   const delBtn = document.getElementById("deleteSelectedBtn");
+  // ===== Import Button Logic =====
+  if (importBtn) {
+    importBtn.addEventListener("click", () => {
+      importModal.style.display = "flex";
+      importFile.value = "";
+      importText.value = "";
+    });
+  }
+
+  if (importCancel) {
+    importCancel.addEventListener("click", () => {
+      importModal.style.display = "none";
+    });
+  }
+
+  if (importFile) {
+    importFile.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        importText.value = ev.target.result;
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  if (importConfirm) {
+    importConfirm.addEventListener("click", () => {
+      let data;
+      try {
+        data = JSON.parse(importText.value);
+      } catch {
+        showToast("Invalid JSON format.", "error");
+        return;
+      }
+      // Accept either {properties: [...]}, or just an array
+      let props = Array.isArray(data) ? data : data.properties;
+      if (!Array.isArray(props)) {
+        showToast("No properties found in import.", "error");
+        return;
+      }
+      // Merge into catalogue
+      const catalog = getCatalog();
+      let added = 0;
+      props.forEach(p => {
+        // Only add if not already present (by id)
+        if (!catalog.properties.some(x => x.id === p.id)) {
+          catalog.properties.push(p);
+          added++;
+        }
+      });
+      saveCatalog(catalog);
+      showToast(`${added} properties imported.`, added ? "success" : "info");
+      importModal.style.display = "none";
+      render();
+    });
+  }
 
   function filteredProps() {
     const catalog = getCatalog();
@@ -66,16 +130,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     cards.innerHTML = props.map(p => {
-      const addr = parseAddress(p?.source?.address || "");
+      const addrRaw = p?.source?.address || "";
+      const addr = parseAddress(addrRaw);
       const head = addr.line1 || "(No address)";
+
+      // Everything after the first comma (if any)
+      let sub = "";
+      const idx = addrRaw.indexOf(",");
+      if (idx !== -1 && idx + 1 < addrRaw.length) {
+        sub = `<div class="small" style="margin-top:2px">${addrRaw.slice(idx + 1).trim()}</div>`;
+      }
 
       const hasUnit = addr.line2 && /(?:apt|suite|ste|unit|#)/i.test(addr.line2);
       const line2 = hasUnit ? `<div class="small" style="opacity:.85">${addr.line2}</div>` : "";
-
-      const cityStateZip = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
-      const countryText = (addr.country && !/^(us|usa|united states)$/i.test(addr.country)) ? `, ${addr.country}` : "";
-      const sub = cityStateZip || countryText ? `<div class="small" style="margin-top:2px">${cityStateZip}${countryText}</div>` : "";
-
       const link = p.source?.link ? `<a href="${p.source.link}" target="_blank">Listing</a>` : "<span class='small'>No link</span>";
 
       // ------- KPI badges per module -------
@@ -189,7 +256,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const idx = (catalog.properties || []).findIndex(p => p.id === id);
     if (idx >= 0) {
       catalog.properties[idx].pinned = false;
-      catalog.properties[idx].updatedAt = new Date().toISOString();
+      // Do NOT update updatedAt when pinning/unpinning
       saveCatalog(catalog);
       showToast("Property unpinned.", "success");
       render();
@@ -229,7 +296,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const catalog = getCatalog();
     catalog.properties = (catalog.properties || []).map(p => {
       if (!checks.includes(p.id)) return p;
-      return { ...p, pinned: !p.pinned, updatedAt: new Date().toISOString() };
+      // Do NOT update updatedAt when pinning/unpinning
+      return { ...p, pinned: !p.pinned };
     });
     saveCatalog(catalog);
     showToast("Pinned state updated.", "success");
