@@ -296,43 +296,97 @@ function computeAll(input) {
 function openPrintableCatalogue(props) {
   const w = window.open("", "_blank");
   if (!w) return;
-  const rows = props.map(p => {
+  // Split properties by module
+  const graspProps = props.filter(p => p.module === "GRASP");
+  const fratProps = props.filter(p => p.module === "FRAT");
+
+  // GRASP table rows
+  const graspRows = graspProps.map(p => {
     const addr = parseAddress(p?.source?.address || "");
     const head = addr.line1 || "(No address)";
     const subBits = [];
     if (addr.line2) subBits.push(addr.line2);
     const locLine = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
     if (locLine) subBits.push(locLine);
-    // Country shown only if not US
-    if (addr.country && !/^(united states)$/i.test(addr.country)) subBits.push(addr.country);
-
+    if (addr.country && !/^(united states|us|usa)$/i.test(addr.country)) subBits.push(addr.country);
     const coc = isFinite(p.computed?.cashOnCash) ? (p.computed.cashOnCash * 100).toFixed(2) + "%" : "N/A";
     const cap = isFinite(p.computed?.capRate) ? (p.computed.capRate * 100).toFixed(2) + "%" : "N/A";
     const dscr = isFinite(p.computed?.dscr) ? p.computed.dscr.toFixed(2) : "N/A";
+    // Calculate Total Initial Investment
+    const downPayment = Number(p.inputs.propertyValue) * (Number(p.inputs.percentDownPct) / 100);
+    const closingCosts = Number(p.inputs.propertyValue) * 0.05;
+    const improvementCost = Number(p.inputs.estImprovementCost) || 0;
+    const totalInitial = downPayment + closingCosts + improvementCost;
+    const grossRentMonthly = isFinite(p.computed?.grossRentMonthly) ? formatMoney(p.computed.grossRentMonthly) : "N/A";
+    const annualCashFlow = isFinite(p.computed?.annualCashFlow) ? formatMoney(p.computed.annualCashFlow) : "N/A";
     return `<tr>
-      <td>
-        <div style="font-weight:700">${head}</div>
-        <div style="font-size:12px;color:#555">${subBits.join(" — ")}</div>
-      </td>
+      <td><div style="font-weight:700">${head}</div><div style="font-size:12px;color:#555">${subBits.join(" — ")}</div></td>
       <td>${formatMoney(p.inputs.propertyValue)}</td>
+      <td>${formatMoney(totalInitial)}</td>
+      <td>${grossRentMonthly}</td>
+      <td>${annualCashFlow}</td>
       <td>${coc}</td>
       <td>${cap}</td>
       <td>${dscr}</td>
     </tr>`;
   }).join("");
+
+  // FRAT table rows
+  const fratRows = fratProps.map(p => {
+    const addr = parseAddress(p?.source?.address || "");
+    const head = addr.line1 || "(No address)";
+    const subBits = [];
+    if (addr.line2) subBits.push(addr.line2);
+    const locLine = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
+    if (locLine) subBits.push(locLine);
+    if (addr.country && !/^(united states|us|usa)$/i.test(addr.country)) subBits.push(addr.country);
+    const roi = isFinite(p.computed?.roi) ? (p.computed.roi * 100).toFixed(2) + "%" : "N/A";
+    const monthsHold = isFinite(p.inputs?.monthsHold) ? p.inputs.monthsHold : "N/A";
+    const desiredARV = isFinite(p.inputs?.desiredARV) ? formatMoney(p.inputs.desiredARV) : "N/A";
+    const interestOnly = !!p.inputs?.interestOnly ? "Yes" : "No";
+    const netIncome = isFinite(p.computed?.netIncome) ? formatMoney(p.computed.netIncome) : "N/A";
+    const fixingCost = isFinite(p.inputs?.estFixingCost) ? formatMoney(p.inputs.estFixingCost) : "N/A";
+    return `<tr>
+      <td><div style="font-weight:700">${head}</div><div style="font-size:12px;color:#555">${subBits.join(" — ")}</div></td>
+      <td>${formatMoney(p.inputs.propertyValue)}</td>
+      <td>${fixingCost}</td>
+      <td>${monthsHold}</td>
+      <td>${interestOnly}</td>
+      <td>${desiredARV}</td>
+      <td>${netIncome}</td>
+      <td>${roi}</td>
+    </tr>`;
+  }).join("");
+
   w.document.write(`
     <html><head><title>PAT Catalogue</title>
     <style>
       body{font-family:Arial, sans-serif;padding:20px}
-      table{width:100%;border-collapse:collapse}
+      table{width:100%;border-collapse:collapse;margin-bottom:32px}
       th,td{border:1px solid #ddd;padding:8px;text-align:left}
       th{background:#f1f3f5}
+      h2{margin-top:0}
+      h3{margin-bottom:8px}
     </style></head><body>
     <h2>PAT Catalogue</h2>
-    <table>
-      <thead><tr><th>Address</th><th>Value</th><th>CoC</th><th>Cap</th><th>DSCR</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
+    ${graspProps.length ? `
+      <h3>GRASP Properties</h3>
+      <table>
+        <thead><tr>
+          <th>Address</th><th>Value</th><th>Total Initial Investment</th><th>Gross Rent (Monthly)</th><th>Annual Cash Flow</th><th>CoC</th><th>Cap</th><th>DSCR</th>
+        </tr></thead>
+        <tbody>${graspRows}</tbody>
+      </table>
+    ` : ""}
+    ${fratProps.length ? `
+      <h3>FRAT Properties</h3>
+      <table>
+        <thead><tr>
+          <th>Address</th><th>Value</th><th>Fixing Cost</th><th>Months to Market</th><th>Interest-Only First Year</th><th>Desired ARV</th><th>Net Income</th><th>ROI</th>
+        </tr></thead>
+        <tbody>${fratRows}</tbody>
+      </table>
+    ` : ""}
     <script>window.onload=()=>window.print();</script>
     </body></html>
   `);

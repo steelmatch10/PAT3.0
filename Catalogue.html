@@ -35,15 +35,6 @@
             <option value="GRASP">GRASP</option>
             <option value="FRAT">FRAT</option>
           </select>
-          <select id="kpiFilter" class="input" style="min-width:160px">
-            <option value="">Any KPI band</option>
-            <option value="Great">Great</option>
-            <option value="Good">Good</option>
-            <option value="Okay">Okay</option>
-            <option value="Bad">Bad</option>
-            <option value="Negative">Negative</option>
-            <option value="N/A">N/A</option>
-          </select>
         </div>
         <div class="row" style="gap:8px">
           <select id="exportSelect" class="input" style="min-width:140px">
@@ -51,6 +42,7 @@
             <option value="pdf">Export: PDF</option>
           </select>
           <button class="btn" id="exportBtn">Export</button>
+          <button class="btn" id="importBtn">Import</button>
           <button class="btn" id="pinToggleBtn">Pin/Unpin Selected</button>
           <button class="btn ghost" id="deleteSelectedBtn">Delete Selected</button>
         </div>
@@ -58,6 +50,20 @@
     </section>
 
     <section id="cards" class="grid one" style="margin-top:16px"></section>
+
+    <!-- Import Modal -->
+    <div id="importModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(8,12,22,.6);backdrop-filter:blur(2px);align-items:center;justify-content:center;">
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;max-width:480px;width:96vw;box-shadow:0 24px 60px rgba(0,0,0,.5);">
+        <h3 style="margin-top:0">Import Properties</h3>
+        <p class="small">Paste JSON or select a file. Only valid property data will be imported.</p>
+        <input type="file" id="importFile" accept="application/json" style="margin-bottom:10px;" />
+        <textarea id="importText" rows="6" style="width:100%;margin-bottom:10px;" placeholder="Paste JSON here..."></textarea>
+        <div style="display:flex;justify-content:flex-end;gap:10px;">
+          <button class="btn ghost" id="importCancel">Cancel</button>
+          <button class="btn primary" id="importConfirm">Import</button>
+        </div>
+      </div>
+    </div>
   </div>
 </body>
 
