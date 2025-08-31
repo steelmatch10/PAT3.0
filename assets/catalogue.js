@@ -57,16 +57,22 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       // Merge into catalogue
       const catalog = getCatalog();
-      let added = 0;
+      let added = 0, denied = 0;
       props.forEach(p => {
-        // Only add if not already present (by id)
         if (!catalog.properties.some(x => x.id === p.id)) {
           catalog.properties.push(p);
           added++;
+        } else {
+          denied++;
         }
       });
       saveCatalog(catalog);
-      showToast(`${added} properties imported.`, added ? "success" : "info");
+      const found = props.length;
+      if (denied > 0) {
+        showToast(`${found} properties found. ${denied} denied as duplicates. ${added} imported.`, added ? "success" : "info");
+      } else {
+        showToast(`${added} properties imported.`, added ? "success" : "info");
+      }
       importModal.style.display = "none";
       render();
     });
