@@ -26,11 +26,14 @@ The `backendCreationSecondTry` branch should be deleted based on the following a
 ### Application Verification
 
 The PAT 3.0 application has been tested and confirmed working:
-- ✅ Main page loads correctly
+- ✅ Main page loads correctly ([Screenshot](https://github.com/user-attachments/assets/9bf4af0b-ce02-4a29-84a7-9aee96cec8e5))
 - ✅ GRASP module accessible  
 - ✅ FRAT module accessible
-- ✅ Catalogue functionality available
+- ✅ Catalogue functionality available ([Screenshot](https://github.com/user-attachments/assets/cf8d4fa6-65b1-4c6d-bbe9-1b169b9626c8))
+- ✅ All navigation and core features functional
 - ✅ No backend dependencies in current codebase
+- ✅ Property analysis tools (GRASP/FRAT) operational
+- ✅ Catalogue management system working
 
 ### Deletion Command
 
