@@ -1,0 +1,60 @@
+{
+  "name": "pat3-property-analysis-tool",
+  "version": "3.0.0",
+  "description": "Property Analysis Tool 3.0 - Real estate investment analysis using GRASP (rental) and FRAT (fix-and-flip) methodologies",
+  "main": "assets/app.js",
+  "scripts": {
+    "test": "jest --detectOpenHandles",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose",
+    "test:debug": "node --inspect-brk node_modules/.bin/jest --runInBand",
+    "test:app": "jest tests/app.test.js",
+    "test:grasp": "jest tests/grasp.test.js",
+    "test:frat": "jest tests/frat.test.js",
+    "test:integration": "jest tests/integration.test.js"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "testMatch": [
+      "tests/**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+      "assets/**/*.js",
+      "!assets/styles.css",
+      "!node_modules/**"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 80,
+        "branches": 70,
+        "functions": 80,
+        "lines": 80
+      },
+      "assets/app.js": {
+        "statements": 95,
+        "branches": 90,
+        "functions": 95,
+        "lines": 95
+      }
+    }
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "jest": "^30.3.0"
+  },
+  "keywords": [
+    "real-estate",
+    "investment-analysis",
+    "property-analysis",
+    "rental-analysis",
+    "fix-and-flip",
+    "GRASP",
+    "FRAT"
+  ],
+  "author": "Investment Analysis Team",
+  "license": "ISC"
+}
