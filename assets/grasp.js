@@ -9,7 +9,6 @@ document.addEventListener("DOMContentLoaded", () => {
     percentDownPct: document.getElementById("percentDownPct"),
     rateAprPct: document.getElementById("rateAprPct"),
     loanLengthYears: document.getElementById("loanLengthYears"),
-    psf: document.getElementById("psf"),
     estImprovementCost: document.getElementById("estImprovementCost"),
     taxesMonthly: document.getElementById("taxesMonthly"),
     insuranceMonthly: document.getElementById("insuranceMonthly"),
@@ -46,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function hardResetForm() {
     [
       els.address, els.link, els.propertyValue, els.percentDownPct, els.rateAprPct,
-      els.loanLengthYears, els.psf, els.estImprovementCost, els.taxesMonthly,
+      els.loanLengthYears, els.estImprovementCost, els.taxesMonthly,
       els.insuranceMonthly, els.hoaMonthly, els.units, els.rentPerUnitMonthly, els.comments
     ].forEach(el => { if (!el) return; el.value = (el.id === "loanLengthYears") ? 30 : ""; });
     persistFormState(collectForm());
@@ -77,7 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (isEditMode) {
     const cat = getCatalog();
     const found = (cat.properties || []).find(p => p.id === editId);
-    if (found) {
+    if (found && found.module === "GRASP") {
       els.addOrSaveBtn.textContent = "Save Changes";
       els.address.value = found.source?.address || "";
       els.link.value = found.source?.link || "";
@@ -85,7 +84,6 @@ document.addEventListener("DOMContentLoaded", () => {
       els.percentDownPct.value = found.inputs?.percentDownPct ?? "";
       els.rateAprPct.value = found.inputs?.rateAprPct ?? "";
       els.loanLengthYears.value = found.inputs?.loanLengthYears ?? 30;
-      els.psf.value = found.inputs?.psf ?? "";
       els.estImprovementCost.value = found.inputs?.estImprovementCost ?? "";
       els.taxesMonthly.value = found.inputs?.taxesMonthly ?? "";
       els.insuranceMonthly.value = found.inputs?.insuranceMonthly ?? "";
@@ -130,13 +128,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function setCarryCostLabels(mode) {
-    const sfx = mode === "annual" ? " (Annual)" : " (Monthly)";
-    els.taxesLabel.textContent = "Taxes" + sfx;
-    els.insuranceLabel.textContent = "Insurance" + sfx;
-    els.hoaLabel.textContent = "HOA" + sfx;
-  }
-
   // Show more/less label behavior
   if (els.moreDetails) {
     const summary = els.moreDetails.querySelector("summary");
@@ -148,14 +139,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // Mark dirty on input edits
   ["input", "change"].forEach(evt => {
     ["units", "rentPerUnitMonthly", "address", "link", "propertyValue", "percentDownPct", "rateAprPct",
-      "loanLengthYears", "psf", "estImprovementCost", "taxesMonthly", "insuranceMonthly", "hoaMonthly", "comments"]
+      "loanLengthYears", "estImprovementCost", "taxesMonthly", "insuranceMonthly", "hoaMonthly", "comments"]
       .forEach(id => {
         const el = els[id];
         if (!el) return;
         el.addEventListener(evt, () => {
           persistFormState(collectForm());
           isDirty = true;
-          checkDuplicateAddressUI();
+          checkDuplicateAddressUI(els.address.value, els.addOrSaveBtn, isEditMode);
           triggerCompute();
           // keep our history guard in sync with dirty/clean transitions
           historyGuard.tryInstallOrUninstall();
@@ -190,7 +181,6 @@ document.addEventListener("DOMContentLoaded", () => {
       percentDownPct: els.percentDownPct.value,
       rateAprPct: els.rateAprPct.value,
       loanLengthYears: els.loanLengthYears.value,
-      psf: els.psf.value,
       estImprovementCost: els.estImprovementCost.value,
       taxesMonthly: els.taxesMonthly.value,
       insuranceMonthly: els.insuranceMonthly.value,
@@ -223,18 +213,6 @@ document.addEventListener("DOMContentLoaded", () => {
       rentPerUnitMonthly: +input.rentPerUnitMonthly
     });
     return { cap: k.computed.capRate, coc: k.computed.cashOnCash, dscr: k.computed.dscr };
-  }
-
-  // Duplicate detection UI feedback
-  function checkDuplicateAddressUI() {
-    const dup = findDuplicateByAddress(els.address.value);
-    if (dup && !isEditMode) {
-      els.addOrSaveBtn.textContent = "View/Update Pre-Existing Property in Catalogue";
-      els.addOrSaveBtn.dataset.dupId = dup.id;
-    } else {
-      els.addOrSaveBtn.textContent = isEditMode ? "Save Changes" : "Add Property to Catalogue";
-      delete els.addOrSaveBtn.dataset.dupId;
-    }
   }
 
   function triggerCompute() {
@@ -287,8 +265,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const p15 = isFinite(g.priceForDSCR1_5) ? formatMoney(g.priceForDSCR1_5) : "N/A";
     const p12 = isFinite(g.priceForDSCR1_2) ? formatMoney(g.priceForDSCR1_2) : "N/A";
     els.dscrGuide.innerHTML = `
-      <div class="card"><div class="small">DSCR 1.5 Price</div><div style="font-weight:800;font-size:18px">${p15}</div></div>
-      <div class="card"><div class="small">DSCR 1.2 Price</div><div style="font-weight:800;font-size:18px">${p12}</div></div>
+      <div class="card"><div class="small">DSCR ${CONSTANTS.DSCR_TARGETS[0]} Price</div><div style="font-weight:800;font-size:18px">${p15}</div></div>
+      <div class="card"><div class="small">DSCR ${CONSTANTS.DSCR_TARGETS[1]} Price</div><div style="font-weight:800;font-size:18px">${p12}</div></div>
     `;
   }
 
@@ -296,15 +274,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const s = k.computed.suggestedRentPerUnit;
     const cell = (v) => isFinite(v) ? formatMoney(v) : "N/A";
 
+    const [coc1, coc2, coc3] = CONSTANTS.COC_BANDS.map(v => (v * 100) + "%");
+    const [cap1, cap2, cap3] = CONSTANTS.CAP_RATE_BANDS.map(v => (v * 100) + "%");
     els.suggestedRentCoc.innerHTML = `
-      <tr><td>CoC 7%</td><td>${cell(s.coc.pct7)}</td></tr>
-      <tr><td>CoC 5%</td><td>${cell(s.coc.pct5)}</td></tr>
-      <tr><td>CoC 3%</td><td>${cell(s.coc.pct3)}</td></tr>
+      <tr><td>CoC ${coc1}</td><td>${cell(s.coc.pct7)}</td></tr>
+      <tr><td>CoC ${coc2}</td><td>${cell(s.coc.pct5)}</td></tr>
+      <tr><td>CoC ${coc3}</td><td>${cell(s.coc.pct3)}</td></tr>
     `;
     els.suggestedRentCap.innerHTML = `
-      <tr><td>Cap 12%</td><td>${cell(s.cap.pct12)}</td></tr>
-      <tr><td>Cap 8%</td><td>${cell(s.cap.pct8)}</td></tr>
-      <tr><td>Cap 5%</td><td>${cell(s.cap.pct5)}</td></tr>
+      <tr><td>Cap ${cap1}</td><td>${cell(s.cap.pct12)}</td></tr>
+      <tr><td>Cap ${cap2}</td><td>${cell(s.cap.pct8)}</td></tr>
+      <tr><td>Cap ${cap3}</td><td>${cell(s.cap.pct5)}</td></tr>
     `;
   }
 
@@ -317,7 +297,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const rows = [
       { label: "Down Payment", val: formatMoney(n.downPayment), tip: "Down = Property Value × Percent Down" },
-      { label: "Closing Costs (5%)", val: formatMoney(n.closingCosts), tip: "Closing = Property Value × 5%" },
+      { label: "Closing Costs (est.)", val: formatMoney(n.closingCosts), tip: `Closing = flat ${formatMoney(CONSTANTS.CLOSING_COSTS)} worst-case estimate` },
       { label: "Estimated Improvement Cost", val: formatMoney(Number(els.estImprovementCost.value) || 0), tip: "As entered" },
       { label: "Total Initial Investment", val: formatMoney(totalInitial), tip: "Down + Closing + Improvements" },
       { label: "Loan Amount", val: formatMoney(n.loanAmount), tip: "Loan = Property Value − Down Payment" },
@@ -388,10 +368,9 @@ document.addEventListener("DOMContentLoaded", () => {
         estImprovementCost: +normalized.estImprovementCost,
         bedroomsOrUnits: +normalized.units,
         rentPerUnitMonthly: +normalized.rentPerUnitMonthly,
-        psf: +(els.psf.value || 0) || null,
         comments: els.comments.value || "",
-        closingCostsRate: 0.05,
-        miscRateAnnual: 0.01
+        closingCosts: CONSTANTS.CLOSING_COSTS,
+        miscRateAnnual: CONSTANTS.MISC_RATE_ANNUAL
       },
       computed: {
         mortgageMonthly: round2(computed.computed.mortgageMonthly),
@@ -430,7 +409,7 @@ document.addEventListener("DOMContentLoaded", () => {
       location.href = `GRASP.html?edit=${newId}`;
       return;
     }
-    checkDuplicateAddressUI();
+    checkDuplicateAddressUI(els.address.value, els.addOrSaveBtn, isEditMode);
   });
 
   // Clear inputs
@@ -440,7 +419,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Initial compute
-  checkDuplicateAddressUI();
+  checkDuplicateAddressUI(els.address.value, els.addOrSaveBtn, isEditMode);
   triggerCompute();
 
   // ----- Custom Back/Forward Guard via History API -----

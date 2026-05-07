@@ -36,6 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let editId = params.get("edit");
   let isEditMode = !!editId;
   let lastSavedSnapshot = null;
+  let isDirty = false;
 
   initPlaceholders();
 
@@ -66,7 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Always store/display carry costs in monthly; set toggle state accordingly
       els.viewModeToggle.checked = false;
-      els.viewModeToggle.dataset.mode = "monthly";
+      document.body.dataset.carryMode = "monthly";
       els.viewModeLabel.textContent = "Monthly view";
       setCarryCostLabels("monthly");
 
@@ -81,7 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ===== View mode (Monthly/Annual) — robust handler =====
   els.viewModeToggle.addEventListener("change", () => {
-    const currentMode = els.viewModeToggle.dataset.mode || "monthly";
+    const currentMode = document.body.dataset.carryMode || "monthly";
     const toMode = els.viewModeToggle.checked ? "annual" : "monthly";
     if (currentMode === toMode) return;
 
@@ -99,17 +100,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     els.viewModeLabel.textContent = (toMode === "annual") ? "Annual view" : "Monthly view";
     setCarryCostLabels(toMode);
-    els.viewModeToggle.dataset.mode = toMode;
+    document.body.dataset.carryMode = toMode;
 
     triggerCompute();
   });
-
-  function setCarryCostLabels(mode) {
-    const sfx = mode === "annual" ? " (Annual)" : " (Monthly)";
-    els.taxesLabel.textContent = "Taxes" + sfx;
-    els.insuranceLabel.textContent = "Insurance" + sfx;
-    els.hoaLabel.textContent = "HOA" + sfx;
-  }
 
   function hardResetForm() {
     [
@@ -121,10 +115,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Initialize toggle state & labels deterministically
     els.viewModeToggle.checked = false;
-    els.viewModeToggle.dataset.mode = "monthly";
+    document.body.dataset.carryMode = "monthly";
     els.viewModeLabel.textContent = "Monthly view";
     setCarryCostLabels("monthly");
 
+    isDirty = false;
     lastSavedSnapshot = JSON.stringify(collectForm());
 
     els.addOrSaveBtn.textContent = "Add Property to Catalogue";
@@ -148,10 +143,19 @@ document.addEventListener("DOMContentLoaded", () => {
     watched.forEach(id => {
       const el = els[id];
       if (!el) return;
-      el.addEventListener(evt, () => { checkDuplicateAddressUI(); triggerCompute(); });
+      el.addEventListener(evt, () => {
+        isDirty = true;
+        checkDuplicateAddressUI(els.address.value, els.addOrSaveBtn, isEditMode);
+        triggerCompute();
+        historyGuard.tryInstallOrUninstall();
+      });
     });
   });
-  els.interestOnlyToggle.addEventListener("change", () => { triggerCompute(); });
+  els.interestOnlyToggle.addEventListener("change", () => {
+    isDirty = true;
+    triggerCompute();
+    historyGuard.tryInstallOrUninstall();
+  });
 
   // Nav soft-confirm if unsaved with valid KPI
   document.querySelectorAll(".nav a").forEach(a => {
@@ -202,7 +206,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let taxesMonthly = +f.taxesMonthly;
     let insuranceMonthly = +f.insuranceMonthly;
     let hoaMonthly = +f.hoaMonthly;
-    const mode = els.viewModeToggle.dataset.mode || "monthly";
+    const mode = document.body.dataset.carryMode || "monthly";
     if (mode === "annual") {
       taxesMonthly = taxesMonthly / 12;
       insuranceMonthly = insuranceMonthly / 12;
@@ -223,23 +227,13 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  function checkDuplicateAddressUI() {
-    const dup = findDuplicateByAddress(els.address.value);
-    if (dup && !isEditMode) {
-      els.addOrSaveBtn.textContent = "View/Update Pre-Existing Property in Catalogue";
-      els.addOrSaveBtn.dataset.dupId = dup.id;
-    } else {
-      els.addOrSaveBtn.textContent = isEditMode ? "Save Changes" : "Add Property to Catalogue";
-      delete els.addOrSaveBtn.dataset.dupId;
-    }
-  }
-
   function initPlaceholders() {
+    const [i1, i2, i3, i4] = CONSTANTS.ROI_BANDS.map(v => (v * 100) + "%");
     els.suggestedARV.innerHTML = `
-      <tr><td>ROI 40%</td><td>N/A</td></tr>
-      <tr><td>ROI 30%</td><td>N/A</td></tr>
-      <tr><td>ROI 20%</td><td>N/A</td></tr>
-      <tr><td>ROI 10%</td><td>N/A</td></tr>`;
+      <tr><td>ROI ${i1}</td><td>N/A</td></tr>
+      <tr><td>ROI ${i2}</td><td>N/A</td></tr>
+      <tr><td>ROI ${i3}</td><td>N/A</td></tr>
+      <tr><td>ROI ${i4}</td><td>N/A</td></tr>`;
     els.netIncomeBox.innerHTML = `
       <div class="card"><div class="small">Net Income</div><div style="font-weight:800;font-size:18px">N/A</div></div>`;
     els.kpiBadges.innerHTML = `<div class="kpi na">ROI N/A</div>`;
@@ -269,18 +263,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderSuggestedARV(r) {
     const cell = (v) => isFinite(v) ? formatMoney(v) : "N/A";
+    const [r1, r2, r3, r4] = CONSTANTS.ROI_BANDS.map(v => (v * 100) + "%");
     els.suggestedARV.innerHTML = `
-      <tr><td>ROI 40%</td><td>${cell(r.targets.arv40)}</td></tr>
-      <tr><td>ROI 30%</td><td>${cell(r.targets.arv30)}</td></tr>
-      <tr><td>ROI 20%</td><td>${cell(r.targets.arv20)}</td></tr>
-      <tr><td>ROI 10%</td><td>${cell(r.targets.arv10)}</td></tr>`;
+      <tr><td>ROI ${r1}</td><td>${cell(r.targets.arv40)}</td></tr>
+      <tr><td>ROI ${r2}</td><td>${cell(r.targets.arv30)}</td></tr>
+      <tr><td>ROI ${r3}</td><td>${cell(r.targets.arv20)}</td></tr>
+      <tr><td>ROI ${r4}</td><td>${cell(r.targets.arv10)}</td></tr>`;
   }
 
   function renderSupplemental(r) {
     const s = r.supp;
     const rows = [
       { label: "Down Payment", val: formatMoney(s.downPayment), tip: "Down = Property Value × Percent Down" },
-      { label: "Closing Costs (5%)", val: formatMoney(s.closingCosts), tip: "Closing = Property Value × 5%" },
+      { label: "Closing Costs (est.)", val: formatMoney(s.closingCosts), tip: `Closing = flat ${formatMoney(CONSTANTS.CLOSING_COSTS)} worst-case estimate` },
       { label: "Loan Amount", val: formatMoney(s.loanAmount), tip: "Loan = Property Value − Down" },
       { label: "Mortgage (Monthly)", val: formatMoney(s.mortgageMonthly), tip: s.interestOnly ? "Interest-only: Loan × (APR/12)" : "PMT = r·L / (1 − (1+r)^−n)" },
       { label: "Operating Expenses (Monthly)", val: formatMoney(s.operatingExpensesMonthly), tip: "Taxes + Insurance + HOA + Misc(1%/yr ÷ 12)" },
@@ -333,8 +328,8 @@ document.addEventListener("DOMContentLoaded", () => {
         desiredARV: +n.desiredARV,
         interestOnly: !!n.interestOnly,
         comments: els.comments.value || "",
-        closingCostsRate: 0.05,
-        miscRateAnnual: 0.01
+        closingCosts: CONSTANTS.CLOSING_COSTS,
+        miscRateAnnual: CONSTANTS.MISC_RATE_ANNUAL
       },
       computed: {
         ownershipCostMonthly: round2(r.supp.ownershipCostMonthly),
@@ -361,6 +356,7 @@ document.addEventListener("DOMContentLoaded", () => {
       updatePropertyInCatalog(editId, (prev) => ({ ...prev, ...core, updatedAt: new Date().toISOString() }));
       showToast("Changes saved.", "success");
       lastSavedSnapshot = snap;
+      isDirty = false;
       // Navigate to catalogue and show updated property at top
       window.location.href = "Catalogue.html";
       return;
@@ -373,23 +369,87 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    checkDuplicateAddressUI();
+    checkDuplicateAddressUI(els.address.value, els.addOrSaveBtn, isEditMode);
   });
 
   // Clear
   els.clearBtn.addEventListener("click", () => { hardResetForm(); });
 
-  // Back button same as GRASP
+  // ----- Custom Back/Forward Guard via History API -----
+  const historyGuard = (function () {
+    let guardInstalled = false;
+    let restoring = false;
+
+    function installGuard() {
+      if (guardInstalled) return;
+      if (!shouldWarnUnsaved()) return;
+      guardInstalled = true;
+      history.replaceState({ patGuard: "anchor" }, document.title);
+      history.pushState({ patGuard: "trap" }, document.title);
+      window.addEventListener("popstate", onPopState);
+    }
+
+    function uninstallGuard() {
+      if (!guardInstalled) return;
+      window.removeEventListener("popstate", onPopState);
+      guardInstalled = false;
+    }
+
+    async function onPopState(ev) {
+      if (restoring) { restoring = false; return; }
+      if (!shouldWarnUnsaved()) {
+        uninstallGuard();
+        history.back();
+        return;
+      }
+      const ok = await showConfirm({
+        title: "Unsaved changes",
+        message: "You have unsaved changes with valid KPIs. Leave and lose changes?",
+        okText: "Proceed anyway",
+        cancelText: "Go back"
+      });
+      if (ok) {
+        uninstallGuard();
+        history.back();
+      } else {
+        restoring = true;
+        history.pushState({ patGuard: "trap" }, document.title);
+      }
+    }
+
+    function tryInstallOrUninstall() {
+      if (shouldWarnUnsaved()) installGuard();
+      else uninstallGuard();
+    }
+
+    tryInstallOrUninstall();
+    return { tryInstallOrUninstall };
+  })();
+
+  // Back button with unsaved-changes protection
   const backBtn = document.getElementById('backBtn');
-  if (backBtn) { backBtn.addEventListener('click', (e) => { e.preventDefault(); history.back(); }); }
+  if (backBtn) {
+    backBtn.addEventListener('click', async (e) => {
+      if (shouldWarnUnsaved()) {
+        e.preventDefault();
+        const ok = await showConfirm({
+          title: "Unsaved changes",
+          message: "You have unsaved changes with valid KPIs. Leave and lose changes?",
+          okText: "Proceed anyway",
+          cancelText: "Go back"
+        });
+        if (ok) history.back();
+      }
+    });
+  }
 
   // ---------- FRAT math ----------
   function computeFRAT(n) {
   const pv = n.propertyValue || 0;
   const down = pv * ((n.percentDownPct || 0) / 100);
   const loan = Math.max(pv - down, 0);
-  const closing = pv * 0.05;
-  const miscMonthly = pv * 0.01 / 12;
+  const closing = CONSTANTS.CLOSING_COSTS;
+  const miscMonthly = pv * CONSTANTS.MISC_RATE_ANNUAL / 12;
 
   // Ensure all values are monthly
   const taxesMonthly = n.taxesMonthly || 0;
@@ -436,7 +496,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     return {
       roi, netIncome, desiredARV, totalLosses,
-      targets: { arv40: targetARV(0.40), arv30: targetARV(0.30), arv20: targetARV(0.20), arv10: targetARV(0.10) },
+      targets: { arv40: targetARV(CONSTANTS.ROI_BANDS[0]), arv30: targetARV(CONSTANTS.ROI_BANDS[1]), arv20: targetARV(CONSTANTS.ROI_BANDS[2]), arv10: targetARV(CONSTANTS.ROI_BANDS[3]) },
       supp: {
         downPayment: down,
         closingCosts: closing,
@@ -454,10 +514,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function bandROI(v) {
     if (!isFinite(v)) return { label: "N/A" };
-    if (v > 0.40) return { label: "Amazing" };
-    if (v >= 0.30) return { label: "Great" };
-    if (v >= 0.20) return { label: "Good" };
-    if (v >= 0.10) return { label: "Okay" };
+    if (v > CONSTANTS.ROI_BANDS[0]) return { label: "Amazing" };
+    if (v >= CONSTANTS.ROI_BANDS[1]) return { label: "Great" };
+    if (v >= CONSTANTS.ROI_BANDS[2]) return { label: "Good" };
+    if (v >= CONSTANTS.ROI_BANDS[3]) return { label: "Okay" };
     if (v >= 0) return { label: "Bad" };
     return { label: "Negative" };
   }

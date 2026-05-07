@@ -40,6 +40,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  function isValidProperty(p) {
+    return p != null
+      && typeof p.id === "string" && p.id.length > 0
+      && (p.module === "GRASP" || p.module === "FRAT")
+      && typeof p.inputs === "object" && p.inputs != null
+      && typeof p.computed === "object" && p.computed != null
+      && p.source != null && typeof p.source.address === "string";
+  }
+
   if (importConfirm) {
     importConfirm.addEventListener("click", () => {
       let data;
@@ -55,6 +64,9 @@ document.addEventListener("DOMContentLoaded", () => {
         showToast("No properties found in import.", "error");
         return;
       }
+      const total = props.length;
+      const invalid = props.filter(p => !isValidProperty(p)).length;
+      props = props.filter(isValidProperty);
       // Merge into catalogue
       const catalog = getCatalog();
       let added = 0, denied = 0;
@@ -67,12 +79,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
       saveCatalog(catalog);
-      const found = props.length;
-      if (denied > 0) {
-        showToast(`${found} properties found. ${denied} denied as duplicates. ${added} imported.`, added ? "success" : "info");
-      } else {
-        showToast(`${added} properties imported.`, added ? "success" : "info");
-      }
+      const parts = [];
+      if (invalid > 0) parts.push(`${invalid} skipped (invalid schema)`);
+      if (denied > 0) parts.push(`${denied} denied as duplicates`);
+      parts.push(`${added} imported`);
+      showToast(`${total} found. ${parts.join(". ")}.`, added ? "success" : "info");
       importModal.style.display = "none";
       render();
     });
