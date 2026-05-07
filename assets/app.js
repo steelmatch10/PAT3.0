@@ -178,8 +178,8 @@ function parseAddress(raw) {
     }
   }
 
-  // Normalize common country strings
-  if (/^(us|usa|united states|united states of america)$/i.test(country)) country = "United States";
+  // Omit "United States" (implied default); normalize other country strings
+  if (/^(us|usa|united states|united states of america)$/i.test(country)) country = "";
 
   const normalized = (line1 + "|" + line2 + "|" + city + "|" + state + "|" + zip + "|" + country).toLowerCase();
   return { raw: s, line1, line2, city, state, zip, country, normalized };
