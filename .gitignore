@@ -1,12 +1,19 @@
 # IDE
 .vscode/
 
+# Google OAuth secrets
+credentials.json
+token.json
+
 # Claude Code / AI tooling
 .claude/
 CLAUDE.md
 .claude-flow/
 .swarm/
 .mcp.json
+primer.md
+memory.sh
+.claude-memory.md
 
 # Dependencies
 node_modules/

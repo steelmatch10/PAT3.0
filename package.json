@@ -16,8 +16,11 @@
   },
   "jest": {
     "testEnvironment": "jsdom",
+    "setupFiles": [
+      "<rootDir>/tests/setup.js"
+    ],
     "testMatch": [
-      "tests/**/*.test.js"
+      "<rootDir>/tests/**/*.test.js"
     ],
     "collectCoverageFrom": [
       "assets/**/*.js",
@@ -44,7 +47,8 @@
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
-    "jest": "^30.3.0"
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0"
   },
   "keywords": [
     "real-estate",

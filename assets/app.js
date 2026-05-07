@@ -1,6 +1,19 @@
 // ===== PAT Shared Utilities (storage, formatting, math, address parsing, print) =====
 
 // -------------------------------
+// Named Constants (single source of truth for all thresholds/targets)
+// -------------------------------
+const CONSTANTS = {
+  CLOSING_COSTS:    15000,          // flat worst-case closing cost estimate
+  MISC_RATE_ANNUAL: 0.01,           // 1% annual misc for operating expenses
+  COC_BANDS:        [0.07, 0.05, 0.03],
+  CAP_RATE_BANDS:   [0.12, 0.08, 0.05],
+  DSCR_BANDS:       [1.36, 1.21],
+  DSCR_TARGETS:     [1.5, 1.2],
+  ROI_BANDS:        [0.40, 0.30, 0.20, 0.10],
+};
+
+// -------------------------------
 // Storage & Persistence Helpers
 // -------------------------------
 function getCatalog() {
@@ -52,7 +65,9 @@ function round2(x) { return Math.round((x + Number.EPSILON) * 100) / 100; }
 
 function formatMoney(v) {
   if (!isFinite(v)) return "N/A";
-  return "$" + Math.round(v).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const abs = Math.abs(Math.round(v));
+  const formatted = "$" + abs.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return v < 0 ? "-" + formatted : formatted;
 }
 function formatPct(v) {
   if (!isFinite(v)) return "N/A";
@@ -64,24 +79,24 @@ function formatPct(v) {
 // -------------------------------
 function bandCoC(v) {
   if (!isFinite(v)) return { label: "N/A" };
-  if (v > 0.07) return { label: "Great" };
-  if (v >= 0.05) return { label: "Good" };
-  if (v >= 0.03) return { label: "Okay" };
+  if (v > CONSTANTS.COC_BANDS[0]) return { label: "Great" };
+  if (v >= CONSTANTS.COC_BANDS[1]) return { label: "Good" };
+  if (v >= CONSTANTS.COC_BANDS[2]) return { label: "Okay" };
   if (v >= 0) return { label: "Bad" };
   return { label: "Negative" };
 }
 function bandCapRate(v) {
   if (!isFinite(v)) return { label: "N/A" };
-  if (v > 0.12) return { label: "Great" };
-  if (v >= 0.08) return { label: "Good" };
-  if (v >= 0.05) return { label: "Okay" };
+  if (v > CONSTANTS.CAP_RATE_BANDS[0]) return { label: "Great" };
+  if (v >= CONSTANTS.CAP_RATE_BANDS[1]) return { label: "Good" };
+  if (v >= CONSTANTS.CAP_RATE_BANDS[2]) return { label: "Okay" };
   if (v >= 0) return { label: "Bad" };
   return { label: "Negative" };
 }
 function bandDSCR(v) {
   if (!isFinite(v)) return { label: "N/A" };
-  if (v > 1.36) return { label: "Great" };
-  if (v >= 1.21) return { label: "Okay" }; // per your spec
+  if (v > CONSTANTS.DSCR_BANDS[0]) return { label: "Great" };
+  if (v >= CONSTANTS.DSCR_BANDS[1]) return { label: "Okay" };
   if (v >= 0) return { label: "Bad" };
   return { label: "N/A" };
 }
@@ -184,6 +199,30 @@ function findDuplicateByAddress(addressRaw) {
 }
 
 // -------------------------------
+// Shared UI Helpers (used by both GRASP and FRAT pages)
+// -------------------------------
+function setCarryCostLabels(mode) {
+  const sfx = mode === "annual" ? " (Annual)" : " (Monthly)";
+  const t = document.getElementById("taxesLabel");
+  const i = document.getElementById("insuranceLabel");
+  const h = document.getElementById("hoaLabel");
+  if (t) t.textContent = "Taxes" + sfx;
+  if (i) i.textContent = "Insurance" + sfx;
+  if (h) h.textContent = "HOA" + sfx;
+}
+
+function checkDuplicateAddressUI(addressValue, addOrSaveBtn, isEditMode) {
+  const dup = findDuplicateByAddress(addressValue);
+  if (dup && !isEditMode) {
+    addOrSaveBtn.textContent = "View/Update Pre-Existing Property in Catalogue";
+    addOrSaveBtn.dataset.dupId = dup.id;
+  } else {
+    addOrSaveBtn.textContent = isEditMode ? "Save Changes" : "Add Property to Catalogue";
+    delete addOrSaveBtn.dataset.dupId;
+  }
+}
+
+// -------------------------------
 // Carry Cost Conversion (Monthly <-> Annual for Taxes/Insurance/HOA only)
 // -------------------------------
 function convertCarryCosts(raw, fromMode, toMode) {
@@ -211,8 +250,8 @@ function computeAll(input) {
   const rentPerUnitMonthly = toNumber(input.rentPerUnitMonthly);
 
   const downPayment = propertyValue * percentDown;
-  const closingCosts = propertyValue * 0.05;        // 5%
-  const miscMonthly = (propertyValue * 0.01) / 12;  // 1% annual
+  const closingCosts = CONSTANTS.CLOSING_COSTS;
+  const miscMonthly = (propertyValue * CONSTANTS.MISC_RATE_ANNUAL) / 12;
 
   const loanAmount = Math.max(0, propertyValue - downPayment);
   const r = rateApr / 12;
@@ -276,10 +315,10 @@ function computeAll(input) {
     computed: {
       mortgageMonthly, grossRentMonthly, operatingExpensesMonthly, ownershipCostMonthly,
       annualCashFlow, noiAnnual, capRate, cashOnCash, dscr,
-      dscrGuidance: { priceForDSCR1_5: priceForDSCR(1.5), priceForDSCR1_2: priceForDSCR(1.2) },
+      dscrGuidance: { priceForDSCR1_5: priceForDSCR(CONSTANTS.DSCR_TARGETS[0]), priceForDSCR1_2: priceForDSCR(CONSTANTS.DSCR_TARGETS[1]) },
       suggestedRentPerUnit: {
-        coc: { pct7: rentPerUnitForCoC(0.07), pct5: rentPerUnitForCoC(0.05), pct3: rentPerUnitForCoC(0.03) },
-        cap: { pct12: rentPerUnitForCap(0.12), pct8: rentPerUnitForCap(0.08), pct5: rentPerUnitForCap(0.05) }
+        coc: { pct7: rentPerUnitForCoC(CONSTANTS.COC_BANDS[0]), pct5: rentPerUnitForCoC(CONSTANTS.COC_BANDS[1]), pct3: rentPerUnitForCoC(CONSTANTS.COC_BANDS[2]) },
+        cap: { pct12: rentPerUnitForCap(CONSTANTS.CAP_RATE_BANDS[0]), pct8: rentPerUnitForCap(CONSTANTS.CAP_RATE_BANDS[1]), pct5: rentPerUnitForCap(CONSTANTS.CAP_RATE_BANDS[2]) }
       }
     },
     bands: {
@@ -314,7 +353,7 @@ function openPrintableCatalogue(props) {
     const dscr = isFinite(p.computed?.dscr) ? p.computed.dscr.toFixed(2) : "N/A";
     // Calculate Total Initial Investment
     const downPayment = Number(p.inputs.propertyValue) * (Number(p.inputs.percentDownPct) / 100);
-    const closingCosts = Number(p.inputs.propertyValue) * 0.05;
+    const closingCosts = CONSTANTS.CLOSING_COSTS;
     const improvementCost = Number(p.inputs.estImprovementCost) || 0;
     const totalInitial = downPayment + closingCosts + improvementCost;
     const grossRentMonthly = isFinite(p.computed?.grossRentMonthly) ? formatMoney(p.computed.grossRentMonthly) : "N/A";
@@ -478,3 +517,17 @@ function openPrintableCatalogue(props) {
     });
   };
 })();
+
+// CommonJS exports for Jest test environments (no-op in browser)
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    CONSTANTS,
+    getCatalog, saveCatalog, savePropertyToCatalog, updatePropertyInCatalog,
+    persistFormState, readFormState, saveViewMode, readViewMode,
+    toNumber, round2, formatMoney, formatPct,
+    bandCoC, bandCapRate, bandDSCR, kpiClass, badgeClass,
+    normalizeWhitespace, parseAddress, findDuplicateByAddress,
+    convertCarryCosts, computeAll,
+    setCarryCostLabels, checkDuplicateAddressUI,
+  };
+}
