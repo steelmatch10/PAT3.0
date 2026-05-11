@@ -7,7 +7,6 @@ token.json
 
 # Claude Code / AI tooling
 .claude/
-CLAUDE.md
 .claude-flow/
 .swarm/
 .mcp.json
@@ -25,4 +24,3 @@ INTEGRATION_QUICK_REFERENCE.md
 INTEGRATION_STATUS.md
 PHASE3_COMPLETION_REPORT.md
 PHASE3_TESTING_COMPLETE.md
-tests/
