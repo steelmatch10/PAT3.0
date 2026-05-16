@@ -1,8 +1,8 @@
 # IDE
 .vscode/
 
-# Google OAuth secrets
-credentials.json
+# Secrets
+.env
 token.json
 
 # Claude Code / AI tooling
