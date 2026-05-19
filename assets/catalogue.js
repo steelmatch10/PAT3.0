@@ -1,5 +1,10 @@
 // ===== Catalogue Page Logic =====
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  // Auth gate — redirect to login if not signed in
+  if (typeof initAuth === "function") {
+    const user = await initAuth();
+    if (!user) return;
+  }
   const cards = document.getElementById("cards");
   const moduleFilter = document.getElementById("moduleFilter");
   const searchBox = document.getElementById("searchBox");
