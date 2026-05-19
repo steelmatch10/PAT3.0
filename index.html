@@ -1,30 +1,145 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PAT 3.0 — StartPage</title>
+  <title>PAT 3.0 — Properties</title>
   <link rel="stylesheet" href="assets/styles.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap"
-    rel="stylesheet">
   <style>
-    /* Hero animation */
-    .hero-fade {
-      opacity: 0;
-      transform: translateY(10px);
-      animation: heroIn .6s ease-out .1s forwards;
+    .prop-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
     }
-
-    @keyframes heroIn {
-      to {
-        opacity: 1;
-        transform: none;
-      }
+    .prop-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      transition: border-color .15s, transform .15s;
+    }
+    .prop-card:hover {
+      border-color: var(--brand);
+      transform: translateY(-2px);
+    }
+    .prop-card h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .prop-meta {
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .prop-meta span { white-space: nowrap; }
+    .prop-link {
+      margin-top: 10px;
+      font-size: 12px;
+    }
+    .empty-state {
+      text-align: center;
+      color: var(--muted);
+      padding: 80px 0;
+    }
+    .empty-state p { font-size: 15px; }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .toolbar h2 {
+      margin: 0;
+      flex: 1;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    #newPropBtn {
+      display: none;
+    }
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.6);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.visible {
+      display: flex;
+    }
+    .modal-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 440px;
+    }
+    .modal-box h3 {
+      margin: 0 0 20px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .modal-box .form-group {
+      margin-bottom: 14px;
+    }
+    .modal-box label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 5px;
+    }
+    .modal-box input {
+      width: 100%;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      padding: 9px 11px;
+      outline: none;
+    }
+    .modal-box input:focus { border-color: var(--brand); }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .modal-actions button { flex: 1; }
+    .spinner {
+      display: none;
+      text-align: center;
+      padding: 60px;
+      color: var(--muted);
+    }
+    .spinner.visible { display: block; }
+    .role-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: var(--chip);
+      color: var(--brand);
+    }
+    .role-badge.investor {
+      background: rgba(245,197,66,.12);
+      color: var(--okay);
     }
   </style>
 </head>
-
 <body>
   <div class="container full">
     <header class="header">
@@ -32,19 +147,154 @@
         <div class="logo"></div>
         <h1>PAT 3.0</h1>
       </div>
-      <nav class="nav">
+      <nav class="nav" style="display:flex;align-items:center;gap:12px;">
+        <span id="userEmail" style="font-size:13px;color:var(--muted);"></span>
+        <span id="roleBadge" class="role-badge"></span>
         <a class="btn" href="Catalogue.html">Catalogue</a>
+        <button class="btn" id="logoutBtn">Sign out</button>
       </nav>
     </header>
 
-    <main class="hero hero-fade">
-      <div class="hero-title">Choose Property Profile</div>
-      <div class="hero-actions">
-        <a class="big-btn" href="GRASP.html">GRASP</a>
-        <a class="big-btn" href="FRAT.html">FRAT</a>
+    <main>
+      <div class="toolbar">
+        <h2>Properties</h2>
+        <button class="btn" id="newPropBtn">+ New Property</button>
+      </div>
+
+      <div class="spinner visible" id="spinner">Loading properties…</div>
+      <div id="propGrid" class="prop-grid" style="display:none;"></div>
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <p>No properties found.</p>
+        <p id="emptyHint" style="font-size:13px;"></p>
       </div>
     </main>
   </div>
-</body>
 
+  <!-- New Property Modal -->
+  <div class="modal-overlay" id="newPropModal">
+    <div class="modal-box">
+      <h3>Add Property</h3>
+      <div class="form-group">
+        <label>Address</label>
+        <input type="text" id="newAddress" placeholder="97 Throop Avenue, Newark, NJ" />
+      </div>
+      <div class="form-group">
+        <label>Zillow Link (optional)</label>
+        <input type="url" id="newZillowLink" placeholder="https://zillow.com/…" />
+      </div>
+      <div id="newPropError" style="color:var(--bad);font-size:13px;margin-top:8px;display:none;"></div>
+      <div class="modal-actions">
+        <button class="btn" id="newPropCancel">Cancel</button>
+        <button class="btn" id="newPropSave" style="background:var(--brand);color:#0e1220;font-weight:700;">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/supabase-client.js"></script>
+  <script>
+    (async () => {
+      const user = await initAuth();
+      if (!user) return;
+
+      const member = await getCurrentMember();
+      const founder = member?.global_role === 'founder';
+
+      // Show user info
+      document.getElementById('userEmail').textContent = user.email;
+      const badge = document.getElementById('roleBadge');
+      badge.textContent = member?.global_role ?? 'member';
+      if (member?.global_role === 'investor') badge.classList.add('investor');
+
+      // Show New Property button for founders
+      if (founder) document.getElementById('newPropBtn').style.display = 'block';
+
+      document.getElementById('logoutBtn').addEventListener('click', patSignOut);
+
+      // ── Load properties ────────────────────────────────────────────────────
+      const spinner    = document.getElementById('spinner');
+      const grid       = document.getElementById('propGrid');
+      const emptyState = document.getElementById('emptyState');
+
+      const properties = await fetchProperties();
+      spinner.classList.remove('visible');
+
+      if (properties.length === 0) {
+        emptyState.style.display = 'block';
+        document.getElementById('emptyHint').textContent = founder
+          ? 'Click "+ New Property" to add your first property.'
+          : 'No properties have been shared with you yet.';
+        return;
+      }
+
+      grid.style.display = 'grid';
+      grid.innerHTML = properties.map(p => `
+        <div class="prop-card" data-id="${p.id}" data-address="${escapeHtml(p.address)}">
+          <h3>${escapeHtml(p.address)}</h3>
+          <div class="prop-meta">
+            <span>${p.scenario_count} scenario${p.scenario_count !== 1 ? 's' : ''}</span>
+            <span>Added ${formatDate(p.created_at)}</span>
+          </div>
+          ${p.zillow_link ? `<div class="prop-link"><a href="${escapeHtml(p.zillow_link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">View on Zillow ↗</a></div>` : ''}
+        </div>
+      `).join('');
+
+      grid.querySelectorAll('.prop-card').forEach(card => {
+        card.addEventListener('click', () => {
+          window.location.href = `GRASP.html?propertyId=${card.dataset.id}`;
+        });
+      });
+
+      // ── New Property Modal ────────────────────────────────────────────────
+      const modal      = document.getElementById('newPropModal');
+      const addrInput  = document.getElementById('newAddress');
+      const linkInput  = document.getElementById('newZillowLink');
+      const errEl      = document.getElementById('newPropError');
+      const saveBtn    = document.getElementById('newPropSave');
+
+      document.getElementById('newPropBtn').addEventListener('click', () => {
+        addrInput.value = '';
+        linkInput.value = '';
+        errEl.style.display = 'none';
+        modal.classList.add('visible');
+        addrInput.focus();
+      });
+      document.getElementById('newPropCancel').addEventListener('click', () => {
+        modal.classList.remove('visible');
+      });
+      modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('visible'); });
+
+      saveBtn.addEventListener('click', async () => {
+        const address = addrInput.value.trim();
+        if (!address) { showErr('Address is required.'); return; }
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Creating…';
+        errEl.style.display = 'none';
+        try {
+          const { id } = await createProperty(address, linkInput.value.trim());
+          window.location.href = `GRASP.html?propertyId=${id}&newScenario=1`;
+        } catch (err) {
+          showErr(err.message || 'Failed to create property.');
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Create';
+        }
+      });
+
+      function showErr(msg) {
+        errEl.textContent = msg;
+        errEl.style.display = 'block';
+      }
+
+      // ── Helpers ────────────────────────────────────────────────────────────
+      function escapeHtml(s) {
+        return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
+      function formatDate(iso) {
+        if (!iso) return '';
+        return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+    })();
+  </script>
+</body>
 </html>

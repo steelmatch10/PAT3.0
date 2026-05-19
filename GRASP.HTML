@@ -1,47 +1,179 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PAT 3.0 — GRASP</title>
   <link rel="stylesheet" href="assets/styles.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap"
-    rel="stylesheet">
-  <!-- Load shared utilities first, then page script -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Scenario selector bar */
+    .scenario-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .scenario-bar select {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      padding: 7px 10px;
+      flex: 1;
+      min-width: 180px;
+      outline: none;
+    }
+    .scenario-bar select:focus { border-color: var(--brand); }
+    .scenario-archived-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(239,68,68,.12);
+      color: var(--bad);
+    }
+
+    /* Bedroom table */
+    .bedroom-table-wrap {
+      overflow-x: auto;
+      margin-top: 8px;
+    }
+    .bedroom-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .bedroom-table th, .bedroom-table td {
+      text-align: left;
+      padding: 7px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .bedroom-table th {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      color: var(--muted);
+    }
+    .bedroom-table input[type="text"],
+    .bedroom-table input[type="number"] {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 5px 8px;
+      width: 100%;
+      outline: none;
+    }
+    .bedroom-table input:focus { border-color: var(--brand); }
+    .avg-rent-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .avg-rent-row label { font-size: 13px; color: var(--muted); white-space: nowrap; }
+    .avg-rent-row input {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 5px 8px;
+      width: 120px;
+      outline: none;
+    }
+    .avg-rent-row input:focus { border-color: var(--brand); }
+    .per-bedroom-section { display: none; }
+    .per-bedroom-section.visible { display: block; }
+
+    /* Auth loading spinner */
+    #authSpinner {
+      text-align: center;
+      padding: 80px;
+      color: var(--muted);
+    }
+    #mainContent { display: none; }
+    #mainContent.visible { display: block; }
+
+    /* Scenario actions */
+    .scenario-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn-danger {
+      background: rgba(239,68,68,.12);
+      color: var(--bad);
+      border: 1px solid rgba(239,68,68,.3);
+    }
+    .btn-danger:hover {
+      background: rgba(239,68,68,.2);
+    }
+  </style>
   <script defer src="assets/app.js"></script>
   <script defer src="assets/grasp.js"></script>
 </head>
-
 <body>
-  <div class="container">
+  <div id="authSpinner">Loading…</div>
+  <div class="container" id="mainContent">
     <header class="header">
       <div class="brand">
         <div class="logo"></div>
         <h1>GRASP <span class="small">Gauging Rental Asset Strength &amp; Potential</span></h1>
       </div>
       <nav class="nav">
-        <a class="btn" href="index.html" id="homeBtn">Home</a>
-        <a class="btn" href="#" id="backBtn">Back</a>
+        <a class="btn" href="index.html" id="homeBtn">Properties</a>
         <a class="btn" href="Catalogue.html">Catalogue</a>
+        <button class="btn" id="logoutBtn">Sign out</button>
       </nav>
     </header>
 
+    <!-- Scenario selector (shown when propertyId is in URL) -->
+    <div class="scenario-bar" id="scenarioBar" style="display:none;">
+      <span style="font-size:13px;color:var(--muted);white-space:nowrap;">Scenario:</span>
+      <select id="scenarioSelect"></select>
+      <button class="btn" id="newScenarioBtn">+ New</button>
+      <div class="scenario-actions" id="scenarioActionsBar" style="display:none;">
+        <button class="btn btn-danger" id="archiveScenarioBtn">Archive</button>
+      </div>
+      <span class="scenario-archived-badge" id="archivedBadge" style="display:none;">Archived</span>
+    </div>
+
     <div class="grid two">
       <div class="card">
-        <!-- 1) Valuation & Financing -->
-        <div class="section-title">Valuation & Financing</div>
+
+        <!-- ── 0. Scenario Metadata ───────────────────────────────────────── -->
+        <div class="section-title">Scenario</div>
         <div class="grid two">
           <div class="input">
-            <label>Property Location</label>
-            <input type="text" id="address" placeholder="123 Main St, Apt 2B, City, ST 12345">
+            <label>Scenario Name *</label>
+            <input type="text" id="scenarioName" placeholder="e.g., Best Case Scenario">
           </div>
           <div class="input">
-            <label>Listing URL</label>
-            <input type="url" id="link" placeholder="https://...">
+            <label>Property Location</label>
+            <input type="text" id="address" placeholder="123 Main St, City, NJ">
           </div>
         </div>
+        <div class="input">
+          <label>Scenario Description</label>
+          <textarea id="scenarioDescription" rows="2" placeholder="Optional context or notes about this scenario"></textarea>
+        </div>
+        <div class="input">
+          <label>Listing URL</label>
+          <input type="url" id="link" placeholder="https://...">
+        </div>
 
+        <div class="divider"></div>
+
+        <!-- ── 1. Valuation & Financing ───────────────────────────────────── -->
+        <div class="section-title">Valuation &amp; Financing</div>
         <div class="grid three">
           <div class="input">
             <label>Property Value / Negotiated Value</label>
@@ -56,7 +188,6 @@
             <input type="number" id="rateAprPct" min="0" step="0.01" placeholder="e.g., 6.5">
           </div>
         </div>
-
         <div class="grid three">
           <div class="input">
             <label>Loan Length (years)</label>
@@ -66,11 +197,21 @@
             <label>Estimated Improvement Cost</label>
             <input type="number" id="estImprovementCost" min="0" step="100" placeholder="e.g., 12000">
           </div>
+          <div class="input">
+            <label>Closing Costs</label>
+            <input type="number" id="closingCosts" min="0" step="100" value="15000">
+          </div>
+        </div>
+        <div class="grid two">
+          <div class="input">
+            <label>Misc. Rate (Annual, %)</label>
+            <input type="number" id="miscRateAnnual" min="0" step="0.1" value="1" placeholder="e.g., 1">
+          </div>
         </div>
 
         <div class="divider"></div>
 
-        <!-- 2) Non-Miscellaneous Operating Costs -->
+        <!-- ── 2. Operating Costs ─────────────────────────────────────────── -->
         <div class="row" style="justify-content:space-between;margin-bottom:8px">
           <div class="section-title" style="margin:0">Non-Miscellaneous Operating Costs</div>
           <label class="toggle">
@@ -81,7 +222,9 @@
         </div>
         <div class="grid three">
           <div class="input">
+            <!-- taxesLabel updated by toggle -->
             <label id="taxesLabel">Taxes (Monthly)</label>
+            <!-- id kept as taxesMonthly for display; internally stores taxesAnnual -->
             <input type="number" id="taxesMonthly" min="0" step="1" placeholder="e.g., 450">
           </div>
           <div class="input">
@@ -96,36 +239,59 @@
 
         <div class="divider"></div>
 
-        <!-- 3) Core Income Drivers -->
+        <!-- ── 3. Core Income Drivers ──────────────────────────────────────── -->
         <div class="section-title">Core Income Drivers</div>
         <div class="grid two">
           <div class="input">
             <label>Bedrooms / Units *</label>
             <input type="number" id="units" min="0" placeholder="e.g., 3">
           </div>
-          <div class="input">
+          <div class="input" id="avgRentGroup">
             <label>Rent per Bedroom/Unit (Monthly) *</label>
             <input type="number" id="rentPerUnitMonthly" min="0" step="0.01" placeholder="e.g., 900">
           </div>
         </div>
 
-        <div class="divider"></div>
+        <!-- Per-bedroom toggle -->
+        <div style="margin-top:10px;">
+          <label class="toggle" style="display:inline-flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="calculatePerBedroom">
+            <span class="pill"></span>
+            <span class="small">Calculate per bedroom/unit</span>
+          </label>
+        </div>
 
-        <!-- 4) Notes -->
-        <div class="section-title">Notes</div>
-        <div class="input">
-          <label>Comments</label>
-          <textarea id="comments" rows="3" placeholder="Optional notes"></textarea>
+        <!-- Per-bedroom table (shown when toggle on) -->
+        <div class="per-bedroom-section" id="perBedroomSection">
+          <div class="avg-rent-row" style="margin-top:12px;">
+            <label>Auto-fill avg rent:</label>
+            <input type="number" id="avgRentAutofill" min="0" step="1" placeholder="e.g., 900">
+            <button class="btn" id="autofillBtn" style="font-size:12px;padding:5px 10px;">Apply</button>
+          </div>
+          <div class="bedroom-table-wrap">
+            <table class="bedroom-table">
+              <thead>
+                <tr>
+                  <th style="width:50px;">#</th>
+                  <th>Description</th>
+                  <th style="width:130px;">Rent (Monthly)</th>
+                </tr>
+              </thead>
+              <tbody id="bedroomTableBody"></tbody>
+            </table>
+          </div>
         </div>
 
         <div class="divider"></div>
 
         <div class="row" style="gap:8px">
-          <button class="btn primary" id="addOrSaveBtn">Add Property to Catalogue</button>
+          <button class="btn primary" id="addOrSaveBtn">Save Scenario</button>
           <button class="btn" id="clearBtn">Clear Inputs</button>
         </div>
+        <div id="saveError" style="color:var(--bad);font-size:13px;margin-top:8px;display:none;"></div>
       </div>
 
+      <!-- ── KPI Panel ────────────────────────────────────────────────────── -->
       <aside class="card kpi-panel">
         <h2>KPIs</h2>
         <div class="kpi-badges" id="kpiBadges"></div>
@@ -138,14 +304,14 @@
 
         <div class="divider"></div>
         <div>
-          <div class="section-title">Suggested Rent / Unit</div>
+          <div class="section-title">Suggested Gross Rent</div>
           <div class="group-box group-coc">
             <div class="group-head">CoC targets</div>
             <table class="table" style="margin-top:6px">
               <thead>
                 <tr>
                   <th>Target</th>
-                  <th>Rent / Unit (Monthly)</th>
+                  <th>Gross Rent (Monthly)</th>
                 </tr>
               </thead>
               <tbody id="suggestedRentCoc"></tbody>
@@ -157,7 +323,7 @@
               <thead>
                 <tr>
                   <th>Target</th>
-                  <th>Rent / Unit (Monthly)</th>
+                  <th>Gross Rent (Monthly)</th>
                 </tr>
               </thead>
               <tbody id="suggestedRentCap"></tbody>
@@ -174,7 +340,8 @@
     </div>
   </div>
 
-
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/supabase-client.js"></script>
 </body>
-
 </html>

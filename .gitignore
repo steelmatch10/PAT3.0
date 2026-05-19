@@ -1,9 +1,10 @@
 # IDE
 .vscode/
 
-# Google OAuth secrets
-credentials.json
+# Secrets
+.env
 token.json
+assets/supabase-config.js
 
 # Claude Code / AI tooling
 .claude/
