@@ -1,343 +1,493 @@
-// ===== Catalogue Page Logic =====
+// ===== Catalogue Page Logic (Supabase-backed) =====
 document.addEventListener("DOMContentLoaded", async () => {
-  // Auth gate — redirect to login if not signed in
-  if (typeof initAuth === "function") {
-    const user = await initAuth();
-    if (!user) return;
-  }
-  const cards = document.getElementById("cards");
-  const moduleFilter = document.getElementById("moduleFilter");
-  const searchBox = document.getElementById("searchBox");
-  const exportBtn = document.getElementById("exportBtn");
-  const importBtn = document.getElementById("importBtn");
-  const importModal = document.getElementById("importModal");
-  const importFile = document.getElementById("importFile");
-  const importText = document.getElementById("importText");
-  const importCancel = document.getElementById("importCancel");
-  const importConfirm = document.getElementById("importConfirm");
-  const exportSelect = document.getElementById("exportSelect");
-  const pinToggleBtn = document.getElementById("pinToggleBtn");
-  const delBtn = document.getElementById("deleteSelectedBtn");
-  // ===== Import Button Logic =====
-  if (importBtn) {
-    importBtn.addEventListener("click", () => {
-      importModal.style.display = "flex";
-      importFile.value = "";
-      importText.value = "";
-    });
+  // Auth + role — getCurrentMember is cached after the inline script calls it,
+  // so this is a fast cache hit, not a second DB round-trip.
+  const session = await patGetSession();
+  if (!session) return;
+
+  const member  = await getCurrentMember();
+  const founder = member?.global_role === 'founder';
+  const investor = member?.global_role === 'investor';
+
+  // For investors, fetch their approved property IDs so those float to the top
+  let approvedIds = new Set();
+  if (investor) {
+    approvedIds = await fetchApprovedPropertyIds();
   }
 
-  if (importCancel) {
-    importCancel.addEventListener("click", () => {
-      importModal.style.display = "none";
-    });
-  }
+  // ── DOM refs ───────────────────────────────────────────────────────────────
+  const cards        = document.getElementById('cards');
+  const tableView    = document.getElementById('tableView');
+  const tableBody    = document.getElementById('tableBody');
+  const tblSortStatus = document.getElementById('tblSortStatus');
+  const searchBox    = document.getElementById('searchBox');
+  const moduleFilter = document.getElementById('moduleFilter');
+  const spinner      = document.getElementById('catalogueSpinner');
+  const btnList      = document.getElementById('viewList');
+  const btnTable     = document.getElementById('viewTable');
 
-  if (importFile) {
-    importFile.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        importText.value = ev.target.result;
-      };
-      reader.readAsText(file);
-    });
-  }
+  let currentView = 'list'; // 'list' | 'table'
+  let sortCol = 'updated';  // 'address' | 'scenarios' | 'investment' | 'updated'
+  let sortDir = 'desc';     // 'asc' | 'desc'
+  let kpiFilter = '';       // '' | 'coc' | 'cap' | 'dscr' | 'roi' | 'good'
 
-  function isValidProperty(p) {
-    return p != null
-      && typeof p.id === "string" && p.id.length > 0
-      && (p.module === "GRASP" || p.module === "FRAT")
-      && typeof p.inputs === "object" && p.inputs != null
-      && typeof p.computed === "object" && p.computed != null
-      && p.source != null && typeof p.source.address === "string";
-  }
+  // ── Load data ──────────────────────────────────────────────────────────────
+  // Fetch all properties with their scenarios in one query
+  let allProperties = [];
 
-  if (importConfirm) {
-    importConfirm.addEventListener("click", () => {
-      let data;
-      try {
-        data = JSON.parse(importText.value);
-      } catch {
-        showToast("Invalid JSON format.", "error");
-        return;
-      }
-      // Accept either {properties: [...]}, or just an array
-      let props = Array.isArray(data) ? data : data.properties;
-      if (!Array.isArray(props)) {
-        showToast("No properties found in import.", "error");
-        return;
-      }
-      const total = props.length;
-      const invalid = props.filter(p => !isValidProperty(p)).length;
-      props = props.filter(isValidProperty);
-      // Merge into catalogue
-      const catalog = getCatalog();
-      let added = 0, denied = 0;
-      props.forEach(p => {
-        if (!catalog.properties.some(x => x.id === p.id)) {
-          catalog.properties.push(p);
-          added++;
-        } else {
-          denied++;
-        }
-      });
-      saveCatalog(catalog);
-      const parts = [];
-      if (invalid > 0) parts.push(`${invalid} skipped (invalid schema)`);
-      if (denied > 0) parts.push(`${denied} denied as duplicates`);
-      parts.push(`${added} imported`);
-      showToast(`${total} found. ${parts.join(". ")}.`, added ? "success" : "info");
-      importModal.style.display = "none";
-      render();
-    });
-  }
+  async function loadData() {
+    spinner.style.display = 'block';
+    cards.innerHTML = '';
 
-  function filteredProps() {
-    const catalog = getCatalog();
-    const q = (searchBox.value || "").toLowerCase().trim();
-    const mod = moduleFilter.value;
-    let props = catalog.properties || [];
-    if (mod) props = props.filter(p => p.module === mod);
-    if (q) {
-      props = props.filter(p => {
-        const a = parseAddress(p?.source?.address || "");
-        return a.line1.toLowerCase().includes(q);
-      });
+    const { data, error } = await supabaseClient
+      .from('properties')
+      .select(`
+        id,
+        address,
+        zillow_link,
+        created_at,
+        updated_at,
+        pinned,
+        scenarios(
+          id,
+          module,
+          scenario_name,
+          inputs,
+          computed,
+          bands,
+          archived_at
+        )
+      `)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    spinner.style.display = 'none';
+
+    if (error) {
+      cards.innerHTML = `<div class="cat-empty">Failed to load properties: ${escapeHtml(error.message)}</div>`;
+      return;
     }
+
+    allProperties = (data || []).map(p => ({
+      ...p,
+      scenarios: (p.scenarios || []).filter(s => !s.archived_at),
+    }));
+
+    render();
+  }
+
+  // ── Filtering & sorting ────────────────────────────────────────────────────
+  function latestActivity(p) {
+    if (!p.scenarios.length) return new Date(p.updated_at || p.created_at);
+    return p.scenarios.reduce((max, s) => {
+      const d = new Date(s.updated_at || 0);
+      return d > max ? d : max;
+    }, new Date(0));
+  }
+
+  function bestInvestment(p) {
+    const s = bestScenario(p.scenarios);
+    if (!s) return -Infinity;
+    if (s.module === 'FRAT') {
+      return (parseFloat(s.inputs?.propertyValue) || 0) + (parseFloat(s.inputs?.estFixingCost) || 0);
+    }
+    const val  = parseFloat(s.inputs?.propertyValue) || 0;
+    const down = val * ((parseFloat(s.inputs?.percentDownPct) || 0) / 100);
+    return down + CONSTANTS.CLOSING_COSTS + (parseFloat(s.inputs?.estImprovementCost) || 0);
+  }
+
+  function passesKpiFilter(p) {
+    if (!kpiFilter) return true;
+    const s = bestScenario(p.scenarios);
+    if (!s) return false;
+    const coc  = s.computed?.cashOnCash;
+    const cap  = s.computed?.capRate;
+    const dscr = s.computed?.dscr;
+    const roi  = s.computed?.roi;
+    switch (kpiFilter) {
+      case 'coc':  return isFinite(coc)  && coc  >= 0.05;
+      case 'cap':  return isFinite(cap)  && cap  >= 0.08;
+      case 'dscr': return isFinite(dscr) && dscr >= 1.2;
+      case 'roi':  return isFinite(roi)  && roi  >= 0.20;
+      default: return true;
+    }
+  }
+
+  function filteredProperties() {
+    const q   = (searchBox.value || '').toLowerCase().trim();
+    const mod = moduleFilter.value;
+
+    let props = allProperties.filter(p => {
+      const addressMatch = !q || p.address.toLowerCase().includes(q);
+      const moduleMatch  = !mod || p.scenarios.length === 0 || p.scenarios.some(s => s.module === mod);
+      const kpiMatch     = currentView === 'table' ? passesKpiFilter(p) : true;
+      return addressMatch && moduleMatch && kpiMatch;
+    });
+
+    // Sort — pinned (founders) or approved (investors) always floats to top
+    const isElevated = p => founder ? !!p.pinned : approvedIds.has(p.id);
+    const dir = sortDir === 'asc' ? 1 : -1;
+    props = [...props].sort((a, b) => {
+      const pinDiff = (isElevated(b) ? 1 : 0) - (isElevated(a) ? 1 : 0);
+      if (pinDiff !== 0) return pinDiff;
+      switch (sortCol) {
+        case 'address':    return dir * a.address.localeCompare(b.address);
+        case 'scenarios':  return dir * (a.scenarios.length - b.scenarios.length);
+        case 'investment': return dir * (bestInvestment(a) - bestInvestment(b));
+        case 'updated':
+        default:
+          return dir * (latestActivity(a) - latestActivity(b));
+      }
+    });
+
     return props;
   }
 
-  function sortForDisplay(arr) {
-    return [...arr].sort((a, b) => {
-      if ((b.pinned ? 1 : 0) !== (a.pinned ? 1 : 0)) return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
-      return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+  // ── Best scenario logic ────────────────────────────────────────────────────
+  // For GRASP: best = highest CoC. For FRAT: best = highest ROI.
+  // If mixed modules on a property, prefer GRASP.
+  function bestScenario(scenarios) {
+    if (!scenarios || scenarios.length === 0) return null;
+
+    const graspScenarios = scenarios.filter(s => s.module === 'GRASP');
+    const fratScenarios  = scenarios.filter(s => s.module === 'FRAT');
+
+    if (graspScenarios.length > 0) {
+      return graspScenarios.reduce((best, s) => {
+        const coc = s.computed?.cashOnCash ?? -Infinity;
+        return coc > (best.computed?.cashOnCash ?? -Infinity) ? s : best;
+      });
+    }
+    return fratScenarios.reduce((best, s) => {
+      const roi = s.computed?.roi ?? -Infinity;
+      return roi > (best.computed?.roi ?? -Infinity) ? s : best;
     });
   }
 
-  // Adjust compact mode & min card height based on viewport/controls height
-  function applyCompactModeIfNeeded() {
-    const controls = document.querySelector("section.card");
-    const controlsH = controls ? controls.getBoundingClientRect().height : 120;
-
-    const minH = Math.max(180, Math.round(1.5 * controlsH));
-    document.documentElement.style.setProperty("--prop-min-h", `${minH}px`);
-
-    const listH = document.body.getBoundingClientRect().height;
-    const overflow = listH > window.innerHeight + 24;
-    if (overflow) {
-      document.body.classList.add("compact");
-    } else {
-      document.body.classList.remove("compact");
+  // ── KPI badge HTML ─────────────────────────────────────────────────────────
+  function capitalRequired(scenario) {
+    const inp = scenario.inputs || {};
+    if (scenario.module === 'FRAT') {
+      return (parseFloat(inp.propertyValue) || 0) + (parseFloat(inp.estFixingCost) || 0);
     }
+    const val  = parseFloat(inp.propertyValue) || 0;
+    const down = val * ((parseFloat(inp.percentDownPct) || 0) / 100);
+    return down + CONSTANTS.CLOSING_COSTS + (parseFloat(inp.estImprovementCost) || 0);
   }
 
+  function kpiBadgesHtml(scenario) {
+    if (!scenario) return `<div class="cat-kpi-group"><span class="cat-no-scenarios">No scenarios yet</span></div>`;
+
+    const total = capitalRequired(scenario);
+    const capitalHtml = `
+      <div class="cat-capital">
+        <span class="cat-capital-label">Capital Required</span>
+        <span class="cat-capital-value">${isFinite(total) && total > 0 ? formatMoney(total) : 'N/A'}</span>
+      </div>`;
+
+    let badgesHtml;
+    if (scenario.module === 'FRAT') {
+      const roi  = scenario.computed?.roi;
+      const band = (function(v) {
+        if (!isFinite(v)) return { label: 'N/A' };
+        if (v > 0.40) return { label: 'Amazing' };
+        if (v >= 0.30) return { label: 'Great' };
+        if (v >= 0.20) return { label: 'Good' };
+        if (v >= 0.10) return { label: 'Okay' };
+        if (v >= 0)    return { label: 'Bad' };
+        return { label: 'Negative' };
+      })(roi);
+      badgesHtml = `<div class="${badgeClass(band)}">ROI ${isFinite(roi) ? (roi * 100).toFixed(2) + '%' : 'N/A'}</div>`;
+    } else {
+      const coc  = scenario.computed?.cashOnCash;
+      const cap  = scenario.computed?.capRate;
+      const dscr = scenario.computed?.dscr;
+      badgesHtml = `
+        <div class="${badgeClass(bandCoC(coc))}">CoC ${isFinite(coc) ? (coc * 100).toFixed(2) + '%' : 'N/A'}</div>
+        <div class="${badgeClass(bandCapRate(cap))}">Cap ${isFinite(cap) ? (cap * 100).toFixed(2) + '%' : 'N/A'}</div>
+        <div class="${badgeClass(bandDSCR(dscr))}">DSCR ${isFinite(dscr) ? dscr.toFixed(2) : 'N/A'}</div>`;
+    }
+
+    return `
+      <div class="cat-kpi-group">
+        <div class="cat-kpis">${badgesHtml}</div>
+        ${capitalHtml}
+      </div>`;
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   function render() {
-    const props = sortForDisplay(filteredProps());
+    const props = filteredProperties();
+
+    if (currentView === 'table') {
+      cards.style.display = 'none';
+      tableView.style.display = 'block';
+      renderTable(props);
+      return;
+    }
+
+    tableView.style.display = 'none';
+    cards.style.display = 'grid';
 
     if (props.length === 0) {
-      cards.innerHTML = `<div class="card"><div class="small">No properties match your filters.</div></div>`;
-      applyCompactModeIfNeeded();
+      cards.innerHTML = `<div class="cat-empty">No properties match your filters.</div>`;
       return;
     }
 
     cards.innerHTML = props.map(p => {
-      const addrRaw = p?.source?.address || "";
-      const addr = parseAddress(addrRaw);
-      const head = addr.line1 || "(No address)";
+      const best       = bestScenario(p.scenarios);
+      const scenCount  = p.scenarios.length;
+      const module     = best?.module ?? null;
+      const targetPage = module === 'FRAT' ? 'FRAT.html' : 'GRASP.html';
 
-      // Everything after the first comma (if any)
-      let sub = "";
-      const idx = addrRaw.indexOf(",");
-      if (idx !== -1 && idx + 1 < addrRaw.length) {
-        sub = `<div class="small" style="margin-top:2px">${addrRaw.slice(idx + 1).trim()}</div>`;
-      }
+      // Split "97 Throop Ave, New Brunswick, NJ 08901" into street / locality
+      const commaIdx = p.address.indexOf(',');
+      const street   = commaIdx !== -1 ? p.address.slice(0, commaIdx) : p.address;
+      const locality = commaIdx !== -1 ? p.address.slice(commaIdx + 1).trim() : '';
 
-      const hasUnit = addr.line2 && /(?:apt|suite|ste|unit|#)/i.test(addr.line2);
-      const line2 = hasUnit ? `<div class="small" style="opacity:.85">${addr.line2}</div>` : "";
-      const link = p.source?.link ? `<a href="${p.source.link}" target="_blank">Listing</a>` : "<span class='small'>No link</span>";
+      const scenLabel = scenCount === 0
+        ? 'No scenarios yet'
+        : `${scenCount} scenario${scenCount !== 1 ? 's' : ''}${best ? ` · best: ${escapeHtml(best.scenario_name)}` : ''}`;
 
-      // ------- KPI badges per module -------
-      let badgesHtml = "";
-      if (p.module === "FRAT") {
-        const roi = p.computed?.roi;
-        const band = (function (v) {
-          if (!isFinite(v)) return { label: "N/A" };
-          if (v > 0.40) return { label: "Amazing" };
-          if (v >= 0.30) return { label: "Great" };
-          if (v >= 0.20) return { label: "Good" };
-          if (v >= 0.10) return { label: "Okay" };
-          if (v >= 0) return { label: "Bad" };
-          return { label: "Negative" };
-        })(roi);
-        badgesHtml = `<div class="${badgeClass(band)}">ROI ${isFinite(roi) ? (roi * 100).toFixed(2) + "%" : "N/A"}</div>`;
-      } else {
-        const coc = p.computed?.cashOnCash;
-        const cap = p.computed?.capRate;
-        const dscr = p.computed?.dscr;
-        const bCoC = bandCoC(coc);
-        const bCap = bandCapRate(cap);
-        const bDSCR = bandDSCR(dscr);
-        badgesHtml = `
-          <div class="${badgeClass(bCoC)}">CoC ${isFinite(coc) ? (coc * 100).toFixed(2) + "%" : "N/A"}</div>
-          <div class="${badgeClass(bCap)}">Cap ${isFinite(cap) ? (cap * 100).toFixed(2) + "%" : "N/A"}</div>
-          <div class="${badgeClass(bDSCR)}">DSCR ${isFinite(dscr) ? dscr.toFixed(2) : "N/A"}</div>
-        `;
-      }
-
-      // ------- Details grid per module -------
-      let detailsHtml = "";
-      if (p.module === "FRAT") {
-        const monthsHold = p.inputs?.monthsHold;
-        const desiredARV = p.inputs?.desiredARV;
-        const interestOnly = !!p.inputs?.interestOnly;
-        const netIncome = p.computed?.netIncome;
-        detailsHtml = `
-          <div style="display:flex;flex-direction:row;justify-content:space-between;align-items:center;width:100%;gap:0;">
-            <div style="flex:1;text-align:center;"><div class="small">Property Value</div><div>${formatMoney(p.inputs.propertyValue)}</div></div>
-            <div style="flex:1;text-align:center;"><div class="small">Fixing Cost</div><div>${formatMoney(p.inputs.estFixingCost || 0)}</div></div>
-            <div style="flex:1;text-align:center;"><div class="small">Months to Market</div><div>${isFinite(monthsHold) ? monthsHold : "N/A"}</div></div>
-            <div style="flex:1;text-align:center;"><div class="small">Interest-Only First Year</div><div>${interestOnly ? "Yes" : "No"}</div></div>
-            <div style="flex:1;text-align:center;"><div class="small">Desired ARV</div><div>${isFinite(desiredARV) ? formatMoney(desiredARV) : "N/A"}</div></div>
-            <div style="flex:1;text-align:center;"><div class="small">Net Income</div><div>${isFinite(netIncome) ? formatMoney(netIncome) : "N/A"}</div></div>
-          </div>
-        `;
-      } else {
-        // Calculate Total Initial Investment
-        const downPayment = Number(p.inputs.propertyValue) * (Number(p.inputs.percentDownPct) / 100);
-        const closingCosts = Number(p.inputs.propertyValue) * 0.05;
-        const improvementCost = Number(p.inputs.estImprovementCost) || 0;
-        const totalInitial = downPayment + closingCosts + improvementCost;
-        const grossRentMonthly = p.computed?.grossRentMonthly;
-        const annualCashFlow = p.computed?.annualCashFlow;
-        detailsHtml = `
-          <div style="display:flex;flex-direction:row;justify-content:space-between;align-items:center;width:100%;gap:0;">
-            <div style="flex:1;text-align:center;"><div class="small">Property Value</div><div>${formatMoney(p.inputs.propertyValue)}</div></div>
-            <div style="flex:1;text-align:center;"><div class="small">Total Initial Investment</div><div>${formatMoney(totalInitial)}</div></div>
-            <div style="flex:1;text-align:center;"><div class="small">Gross Rent (Monthly)</div><div>${isFinite(grossRentMonthly) ? formatMoney(grossRentMonthly) : "N/A"}</div></div>
-            <div style="flex:1;text-align:center;"><div class="small">Annual Cash Flow</div><div>${isFinite(annualCashFlow) ? formatMoney(annualCashFlow) : "N/A"}</div></div>
-          </div>
-        `;
-      }
-
-      const pinBadge = p.pinned
-        ? `<button class="badge good pinBadge" data-id="${p.id}" title="Click to unpin">Pinned</button>`
-        : "";
-
-      // ------- Card template -------
       return `
-        <div class="card property-card">
-          <div class="row" style="justify-content:space-between;align-items:center">
-            <div style="display:flex;gap:10px;align-items:center">
-              <input type="checkbox" class="selectBox" data-id="${p.id}"/>
-              <div>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                  <div class="addr-head">${head}</div>
-                  ${line2}
-                  ${pinBadge}
-                </div>
-                ${sub}
-                <div class="small" style="margin-top:4px">${link}</div>
-                <div class="small">Module: ${p.module}</div>
-                <div class="small">Updated: ${new Date(p.updatedAt || p.createdAt).toLocaleString()}</div>
+        <div class="cat-card${(founder && p.pinned) || (investor && approvedIds.has(p.id)) ? ' cat-card-pinned' : ''}" data-id="${p.id}">
+          <div class="cat-card-header">
+            <div class="cat-card-top">
+              ${founder ? `<input type="checkbox" class="cat-select" data-id="${p.id}" onclick="event.stopPropagation()" />` : ''}
+              ${founder && p.pinned ? '<span class="cat-pin-badge">Pinned</span>' : ''}
+              ${investor && approvedIds.has(p.id) ? '<span class="cat-pin-badge investor">Scenario editing enabled</span>' : ''}
+            </div>
+            <div class="cat-addr">
+              <div class="cat-addr-main">${escapeHtml(street)}</div>
+              ${locality ? `<div class="cat-addr-locality">${escapeHtml(locality)}</div>` : ''}
+              <div class="cat-addr-meta">
+                ${scenLabel}
+                &nbsp;·&nbsp;
+                Updated ${formatDate(p.updated_at || p.created_at)}
+                ${p.zillow_link ? `&nbsp;·&nbsp;<a href="${escapeHtml(p.zillow_link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Zillow ↗</a>` : ''}
               </div>
             </div>
-            <div class="kpi-badges">
-              ${badgesHtml}
-            </div>
           </div>
-          <div class="divider"></div>
-          ${detailsHtml}
-          <div class="divider"></div>
-          <div class="row" style="justify-content:flex-end;gap:8px">
-            <a class="btn" href="${p.module === 'FRAT' ? 'FRAT.html' : 'GRASP.html'}?edit=${p.id}">Edit</a>
+          ${kpiBadgesHtml(best)}
+          <div class="cat-card-footer">
+            <a class="btn" href="${targetPage}?propertyId=${p.id}">Open →</a>
           </div>
-        </div>
-      `;
-    }).join("");
-
-    applyCompactModeIfNeeded();
+        </div>`;
+    }).join('');
   }
 
-  // Click Pinned badge to unpin
-  cards.addEventListener("click", (e) => {
-    const btn = e.target.closest(".pinBadge");
-    if (!btn) return;
-    const id = btn.dataset.id;
-    const catalog = getCatalog();
-    const idx = (catalog.properties || []).findIndex(p => p.id === id);
-    if (idx >= 0) {
-      catalog.properties[idx].pinned = false;
-      // Do NOT update updatedAt when pinning/unpinning
-      saveCatalog(catalog);
-      showToast("Property unpinned.", "success");
+  // ── Table render ───────────────────────────────────────────────────────────
+  function renderTable(props) {
+    if (props.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--muted);">No properties match your filters.</td></tr>`;
+      return;
+    }
+    tableBody.innerHTML = props.map(p => {
+      const best       = bestScenario(p.scenarios);
+      const scenCount  = p.scenarios.length;
+      const module     = best?.module ?? null;
+      const targetPage = module === 'FRAT' ? 'FRAT.html' : 'GRASP.html';
+
+      const commaIdx = p.address.indexOf(',');
+      const street   = commaIdx !== -1 ? p.address.slice(0, commaIdx) : p.address;
+      const locality = commaIdx !== -1 ? p.address.slice(commaIdx + 1).trim() : '';
+
+      // KPI cells
+      let kpiHtml = '<span style="color:var(--muted);font-style:italic;font-size:12px;">No scenarios</span>';
+      let investHtml = '—';
+      if (best) {
+        if (best.module === 'FRAT') {
+          const roi  = best.computed?.roi;
+          const band = (function(v) {
+            if (!isFinite(v)) return { label: 'N/A' };
+            if (v > 0.40) return { label: 'Amazing' };
+            if (v >= 0.30) return { label: 'Great' };
+            if (v >= 0.20) return { label: 'Good' };
+            if (v >= 0.10) return { label: 'Okay' };
+            if (v >= 0)    return { label: 'Bad' };
+            return { label: 'Negative' };
+          })(roi);
+          kpiHtml = `<div class="tbl-kpis"><span class="${badgeClass(band)}">ROI ${isFinite(roi) ? (roi*100).toFixed(1)+'%' : 'N/A'}</span></div>`;
+          const acq = parseFloat(best.inputs?.propertyValue) || 0;
+          const rehab = parseFloat(best.inputs?.estFixingCost) || 0;
+          investHtml = formatMoney(acq + rehab);
+        } else {
+          const coc  = best.computed?.cashOnCash;
+          const cap  = best.computed?.capRate;
+          const dscr = best.computed?.dscr;
+          kpiHtml = `<div class="tbl-kpis">
+            <span class="${badgeClass(bandCoC(coc))}">CoC ${isFinite(coc) ? (coc*100).toFixed(1)+'%' : 'N/A'}</span>
+            <span class="${badgeClass(bandCapRate(cap))}">Cap ${isFinite(cap) ? (cap*100).toFixed(1)+'%' : 'N/A'}</span>
+            <span class="${badgeClass(bandDSCR(dscr))}">DSCR ${isFinite(dscr) ? dscr.toFixed(2) : 'N/A'}</span>
+          </div>`;
+          const val   = parseFloat(best.inputs?.propertyValue) || 0;
+          const down  = val * ((parseFloat(best.inputs?.percentDownPct) || 0) / 100);
+          const improv = parseFloat(best.inputs?.estImprovementCost) || 0;
+          investHtml = formatMoney(down + CONSTANTS.CLOSING_COSTS + improv);
+        }
+      }
+
+      return `<tr data-id="${p.id}"${(founder && p.pinned) || (investor && approvedIds.has(p.id)) ? ' class="tbl-row-pinned"' : ''}>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${founder ? `<input type="checkbox" class="cat-select" data-id="${p.id}" />` : ''}
+            <div>
+              <div class="tbl-street">
+                ${escapeHtml(street)}
+                ${founder && p.pinned ? '<span class="cat-pin-badge">Pinned</span>' : ''}
+                ${investor && approvedIds.has(p.id) ? '<span class="cat-pin-badge investor">Scenario editing enabled</span>' : ''}
+              </div>
+              ${locality ? `<div class="tbl-locality">${escapeHtml(locality)}</div>` : ''}
+            </div>
+          </div>
+        </td>
+        <td>${scenCount}</td>
+        <td>${kpiHtml}</td>
+        <td class="tbl-invest">${investHtml}</td>
+        <td>${formatDate(p.updated_at || p.created_at)}</td>
+        <td class="tbl-open"><a class="btn" href="${targetPage}?propertyId=${p.id}">Open →</a></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── View toggle ─────────────────────────────────────────────────────────────
+  btnList.addEventListener('click', () => {
+    currentView = 'list';
+    btnList.classList.add('active');
+    btnTable.classList.remove('active');
+    render();
+  });
+  btnTable.addEventListener('click', () => {
+    currentView = 'table';
+    btnTable.classList.add('active');
+    btnList.classList.remove('active');
+    render();
+  });
+
+  // ── Table sort headers ───────────────────────────────────────────────────────
+  const COL_LABELS = { address: 'Address', scenarios: 'Scenarios', investment: 'Capital', updated: 'Updated' };
+  const KPI_LABELS = { coc: 'CoC ≥ 5%', cap: 'Cap ≥ 8%', dscr: 'DSCR ≥ 1.2', roi: 'ROI ≥ 20%', good: 'Any metric meets Good' };
+
+  function updateSortIcons() {
+    document.querySelectorAll('#tblSortRow th.sortable').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc');
+      const icon = th.querySelector('.sort-icon');
+      if (th.dataset.col === sortCol) {
+        th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+        if (icon) icon.textContent = sortDir === 'asc' ? '↑' : '↓';
+      } else {
+        if (icon) icon.textContent = '↕';
+      }
+    });
+
+    // Status line — sort only (KPI filter shown via header indicator)
+    tblSortStatus.innerHTML = sortCol
+      ? `Sorted by <span>${COL_LABELS[sortCol]} ${sortDir === 'asc' ? '↑' : '↓'}</span>`
+      : '';
+  }
+
+  document.querySelectorAll('#tblSortRow th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      if (sortCol === th.dataset.col) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortCol = th.dataset.col;
+        sortDir = th.dataset.col === 'address' ? 'asc' : 'desc';
+      }
+      updateSortIcons();
       render();
-    }
-  });
-
-  // Filters & search
-  moduleFilter.addEventListener("change", render);
-  searchBox.addEventListener("input", render);
-
-  // Export
-  exportBtn.addEventListener("click", () => {
-    const catalog = getCatalog();
-    let props = filteredProps();
-    const which = exportSelect.value;
-    if (which === "json") {
-      const blob = new Blob([JSON.stringify({ schemaVersion: catalog.schemaVersion, properties: props }, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = "pat_catalog.json"; a.click();
-      URL.revokeObjectURL(url);
-      showToast("Catalogue exported as JSON", "success");
-    } else if (which === "pdf") {
-      openPrintableCatalogue(props);
-      showToast("PDF export opened in new window", "info");
-    }
-  });
-
-  // Pin/Unpin selected
-  pinToggleBtn.addEventListener("click", () => {
-    const checks = [...document.querySelectorAll(".selectBox:checked")].map(cb => cb.dataset.id);
-    if (checks.length === 0) {
-      showToast("Select at least one property to pin/unpin.", "info", { title: "Nothing selected" });
-      return;
-    }
-    const catalog = getCatalog();
-    catalog.properties = (catalog.properties || []).map(p => {
-      if (!checks.includes(p.id)) return p;
-      // Do NOT update updatedAt when pinning/unpinning
-      return { ...p, pinned: !p.pinned };
     });
-    saveCatalog(catalog);
-    showToast("Pinned state updated.", "success");
-    render();
   });
 
-  // Delete
-  delBtn.addEventListener("click", async () => {
-    const checks = [...document.querySelectorAll(".selectBox:checked")].map(cb => cb.dataset.id);
-    if (checks.length === 0) {
-      showToast("Select at least one property to delete.", "info", { title: "Nothing selected" });
-      return;
-    }
-    const confirmed = await showConfirm({
-      title: "Delete selected?",
-      message: `Delete ${checks.length} propert${checks.length > 1 ? "ies" : "y"} permanently?`,
-      okText: "Delete",
-      cancelText: "Cancel"
+  // ── KPI dropdown ─────────────────────────────────────────────────────────────
+  const thKpi         = document.getElementById('thKpi');
+  const kpiDropdown   = document.getElementById('kpiDropdown');
+  const kpiIndicator  = document.getElementById('kpiActiveIndicator');
+
+  thKpi.addEventListener('click', e => {
+    e.stopPropagation();
+    kpiDropdown.classList.toggle('open');
+  });
+
+  // Close when clicking outside
+  document.addEventListener('click', () => kpiDropdown.classList.remove('open'));
+
+  kpiDropdown.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      kpiFilter = btn.dataset.val;
+      // Update selected state
+      kpiDropdown.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      // Show/hide indicator
+      kpiIndicator.classList.toggle('visible', !!kpiFilter);
+      kpiDropdown.classList.remove('open');
+      updateSortIcons();
+      render();
     });
-    if (!confirmed) return;
-    const catalog = getCatalog();
-    catalog.properties = (catalog.properties || []).filter(p => !checks.includes(p.id));
-    saveCatalog(catalog);
-    showToast("Deleted selected properties.", "success");
-    render();
   });
 
-  window.addEventListener("resize", () => applyCompactModeIfNeeded());
+  // ── Pin / Unpin (founders only) ────────────────────────────────────────────
+  const pinBtn = document.getElementById('pinBtn');
+  if (pinBtn) {
+    pinBtn.addEventListener('click', async () => {
+      const checked = [...document.querySelectorAll('.cat-select:checked')].map(cb => cb.dataset.id);
+      if (checked.length === 0) {
+        showToast('Select at least one property to pin/unpin.', 'info');
+        return;
+      }
+      // Determine action: if all selected are already pinned → unpin, otherwise pin
+      const selectedProps = allProperties.filter(p => checked.includes(p.id));
+      const allPinned = selectedProps.every(p => p.pinned);
+      const newState = !allPinned;
+      pinBtn.disabled = true;
+      try {
+        await togglePinProperties(checked, newState);
+        // Update local state without full reload
+        allProperties = allProperties.map(p =>
+          checked.includes(p.id) ? { ...p, pinned: newState } : p
+        );
+        showToast(`${checked.length} propert${checked.length > 1 ? 'ies' : 'y'} ${newState ? 'pinned' : 'unpinned'}.`, 'success');
+        render();
+      } catch (err) {
+        showToast('Failed to update pin state.', 'error');
+      } finally {
+        pinBtn.disabled = false;
+      }
+    });
+  }
 
-  render();
+  // ── Export (founders only) ─────────────────────────────────────────────────
+  const exportBtn    = document.getElementById('exportBtn');
+  const exportSelect = document.getElementById('exportSelect');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      const props = filteredProperties();
+      if (exportSelect.value === 'json') {
+        const blob = new Blob([JSON.stringify({ properties: props }, null, 2)], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = 'pat_catalogue.json'; a.click();
+        URL.revokeObjectURL(url);
+        showToast('Catalogue exported as JSON', 'success');
+      } else {
+        showToast('PDF export not yet available in Supabase mode.', 'info');
+      }
+    });
+  }
+
+  // ── Search & filter ────────────────────────────────────────────────────────
+  searchBox.addEventListener('input', render);
+  moduleFilter.addEventListener('change', render);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function escapeHtml(s) {
+    return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function formatDate(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  await loadData();
 });

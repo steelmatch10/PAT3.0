@@ -1,0 +1,282 @@
+[
+  {
+    "street_address": "97 Throop Ave",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": "https://www.zillow.com/homedetails/97-Throop-Ave-New-Brunswick-NJ-08901/39105768_zpid/"
+  },
+  {
+    "street_address": "163 Livingston Ave",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": "https://www.zillow.com/homedetails/163-165-Livingston-Ave-New-Brunswick-NJ-08901/2067417348_zpid/"
+  },
+  {
+    "street_address": "144 George St",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": "https://www.zillow.com/homedetails/144-George-St-New-Brunswick-NJ-08901/39105136_zpid/"
+  },
+  {
+    "street_address": "130B Remsen Ave",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": "https://www.zillow.com/homedetails/130B-Remsen-Ave-New-Brunswick-NJ-08901/178477918_zpid/"
+  },
+  {
+    "street_address": "553 Fulton St",
+    "city": "Brooklyn",
+    "state": "NY",
+    "zip_code": "11201",
+    "zillow_url": "https://www.zillow.com/homedetails/553-Fulton-St-Brooklyn-NY-11201/338699625_zpid/"
+  },
+  {
+    "street_address": "950 W 6th St",
+    "city": "Plainfield",
+    "state": "NJ",
+    "zip_code": "07063",
+    "zillow_url": "https://www.zillow.com/homedetails/950-W-6th-St-Plainfield-NJ-07063/2131739173_zpid/"
+  },
+  {
+    "street_address": "55 Lufberry Ave",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": "https://www.zillow.com/homedetails/55-Lufberry-Ave-New-Brunswick-NJ-08901/39108210_zpid/"
+  },
+  {
+    "street_address": "5 Llewellyn Pl",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": "https://www.zillow.com/homedetails/5-Llewellyn-Pl-New-Brunswick-NJ-08901/39106785_zpid/"
+  },
+  {
+    "street_address": "693 Hanson Ave",
+    "city": "Perth Amboy",
+    "state": "NJ",
+    "zip_code": "08861",
+    "zillow_url": "https://www.zillow.com/homedetails/693-Hanson-Ave-Perth-Amboy-NJ-08861/39137459_zpid/"
+  },
+  {
+    "street_address": "30 Bender Ave",
+    "city": "Iselin",
+    "state": "NJ",
+    "zip_code": "08830",
+    "zillow_url": "https://www.zillow.com/homedetails/30-Bender-Ave-Iselin-NJ-08830/39200225_zpid/"
+  },
+  {
+    "street_address": "845 Hoover Dr",
+    "city": "North Brunswick Township",
+    "state": "NJ",
+    "zip_code": "08902",
+    "zillow_url": "https://www.zillow.com/homedetails/845-Hoover-Dr-North-Brunswick-NJ-08902/88940106_zpid/"
+  },
+  {
+    "street_address": "1819 Allen St",
+    "city": "Rahway",
+    "state": "NJ",
+    "zip_code": "07065",
+    "zillow_url": "https://www.zillow.com/homedetails/1819-Allen-St-Rahway-NJ-07065/40040352_zpid/"
+  },
+  {
+    "street_address": "264 Somerset St",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": "https://www.zillow.com/homedetails/264-Somerset-St-New-Brunswick-NJ-08901/39104932_zpid/"
+  },
+  {
+    "street_address": "303 Holly Dr",
+    "city": "Robbinsville",
+    "state": "NJ",
+    "zip_code": "08691",
+    "zillow_url": null
+  },
+  {
+    "street_address": "68 Welton St",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": null
+  },
+  {
+    "street_address": "184 Green St",
+    "city": "Woodbridge",
+    "state": "NJ",
+    "zip_code": "07095",
+    "zillow_url": null
+  },
+  {
+    "street_address": "46 Mitchell Ave",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": null
+  },
+  {
+    "street_address": "177 E Hazelwood Ave",
+    "city": "Rahway",
+    "state": "NJ",
+    "zip_code": "07065",
+    "zillow_url": null
+  },
+  {
+    "street_address": "407 Alden Rd",
+    "city": "Avenel",
+    "state": "NJ",
+    "zip_code": "07001",
+    "zillow_url": null
+  },
+  {
+    "street_address": "197 Canterbury Ct",
+    "city": "Piscataway",
+    "state": "NJ",
+    "zip_code": "08854",
+    "zillow_url": null
+  },
+  {
+    "street_address": "232 Hamilton St",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": null
+  },
+  {
+    "street_address": "79 Throop Ave",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": null
+  },
+  {
+    "street_address": "220 Paul Robeson Blvd",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": null
+  },
+  {
+    "street_address": "104 Howard St",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": null
+  },
+  {
+    "street_address": "11 Cotter Dr",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": null
+  },
+  {
+    "street_address": "66 Augusta St",
+    "city": "South Amboy",
+    "state": "NJ",
+    "zip_code": "08879",
+    "zillow_url": null
+  },
+  {
+    "street_address": "73 Remsen Ave",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": null
+  },
+  {
+    "street_address": "58 St Nicholas Ave",
+    "city": "Brooklyn",
+    "state": "NY",
+    "zip_code": "11237",
+    "zillow_url": null
+  },
+  {
+    "street_address": "115 Remsen Ave",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": null
+  },
+  {
+    "street_address": "124 Dunbar Ave",
+    "city": "Fords",
+    "state": "NJ",
+    "zip_code": "08863",
+    "zillow_url": null
+  },
+  {
+    "street_address": "43 Grove Pl",
+    "city": "East Orange",
+    "state": "NJ",
+    "zip_code": "07017",
+    "zillow_url": null
+  },
+  {
+    "street_address": "441 Dutch Neck Rd",
+    "city": "East Windsor",
+    "state": "NJ",
+    "zip_code": "08520",
+    "zillow_url": null
+  },
+  {
+    "street_address": "308 Seaman St",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": null
+  },
+  {
+    "street_address": "507 S 19th St",
+    "city": "Newark",
+    "state": "NJ",
+    "zip_code": "07103",
+    "zillow_url": null
+  },
+  {
+    "street_address": "21 Beverly St",
+    "city": "Newark",
+    "state": "NJ",
+    "zip_code": "07108",
+    "zillow_url": null
+  },
+  {
+    "street_address": "5 Peppermint Hill Rd",
+    "city": "North Brunswick Township",
+    "state": "NJ",
+    "zip_code": "08902",
+    "zillow_url": null
+  },
+  {
+    "street_address": "6 Lufberry Ave",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": null
+  },
+  {
+    "street_address": "420 Church Ln",
+    "city": "North Brunswick Township",
+    "state": "NJ",
+    "zip_code": "08902",
+    "zillow_url": null
+  },
+  {
+    "street_address": "11 Edgeworth Pl",
+    "city": "New Brunswick",
+    "state": "NJ",
+    "zip_code": "08901",
+    "zillow_url": null
+  },
+  {
+    "street_address": "12 Union St",
+    "city": "Kingston",
+    "state": "NJ",
+    "zip_code": "08528",
+    "zillow_url": null
+  }
+]
