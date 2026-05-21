@@ -75,16 +75,22 @@ async function fetchProperties() {
       created_at,
       updated_at,
       pinned,
-      scenarios(count)
+      scenarios(module, updated_at, archived_at)
     `)
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
   if (error) { console.error('fetchProperties:', error.message); return []; }
-  return (data || []).map(p => ({
-    ...p,
-    scenario_count: p.scenarios?.[0]?.count ?? 0,
-  }));
+  return (data || []).map(p => {
+    const allScenarios = p.scenarios || [];
+    const active = allScenarios.filter(s => !s.archived_at);
+    const latest = active.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+    return {
+      ...p,
+      scenario_count: allScenarios.length,
+      latest_module: latest?.module || 'GRASP',
+    };
+  });
 }
 
 /**

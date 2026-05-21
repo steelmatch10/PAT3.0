@@ -392,6 +392,8 @@
     // Runs before catalogue.js — sets nav state and applies role hiding synchronously
     // so founder-only elements never flash for investors.
     (async () => {
+      window._patCurrentMember = null;
+
       const user = await initAuth();
       if (!user) return;
       const member = await getCurrentMember();

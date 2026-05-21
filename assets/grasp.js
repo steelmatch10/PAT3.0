@@ -1,5 +1,7 @@
 /* GRASP page behavior — Supabase-integrated */
 document.addEventListener("DOMContentLoaded", async () => {
+  window._patCurrentMember = null;
+
   // ── Auth gate ────────────────────────────────────────────────────────────────
   const authSpinner = document.getElementById("authSpinner");
   const mainContent = document.getElementById("mainContent");
@@ -65,6 +67,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     archiveScenarioBtn:  document.getElementById("archiveScenarioBtn"),
     archivedBadge:       document.getElementById("archivedBadge"),
   };
+
+  // ── Access check — investor read-only enforcement ────────────────────────────
+  let readOnly = false;
+  if (!founder && propertyId) {
+    const approvedIds = await fetchApprovedPropertyIds();
+    if (!approvedIds.has(propertyId)) {
+      readOnly = true;
+      document.getElementById("readOnlyBanner").style.display = "block";
+      document.querySelectorAll("#mainContent input, #mainContent select, #mainContent textarea").forEach(el => {
+        el.disabled = true;
+      });
+      els.addOrSaveBtn.style.display  = "none";
+      els.clearBtn.style.display      = "none";
+      els.newScenarioBtn.style.display = "none";
+      els.archiveScenarioBtn.style.display = "none";
+    }
+  }
 
   // ── State ────────────────────────────────────────────────────────────────────
   let currentScenarioId = null;   // null = new scenario
@@ -430,8 +449,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       els.archiveScenarioBtn.style.display = "none";
     } else {
       els.archivedBadge.style.display = "none";
-      els.archiveScenarioBtn.style.display = "";
-      els.scenarioActionsBar.style.display = "flex";
+      if (!readOnly) {
+        els.archiveScenarioBtn.style.display = "";
+        els.scenarioActionsBar.style.display = "flex";
+      }
     }
 
     hideSaveError();

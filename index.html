@@ -303,6 +303,8 @@
   <script src="assets/app.js"></script>
   <script>
     (async () => {
+      window._patCurrentMember = null;
+
       const user = await initAuth();
       if (!user) return;
 
@@ -447,7 +449,7 @@
       // ── Shared helpers ────────────────────────────────────────────────────────
       function propCardHtml(p, showBadge) {
         return `
-          <div class="prop-card" data-id="${p.id}">
+          <div class="prop-card" data-id="${p.id}" data-module="${p.latest_module || 'GRASP'}">
             <h3>${escapeHtml(p.address)}${founder && p.pinned ? ' <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:5px;background:rgba(110,168,254,.15);color:var(--brand);vertical-align:middle;">Pinned</span>' : ''}</h3>
             <div class="prop-meta">
               <span>${p.scenario_count} scenario${p.scenario_count !== 1 ? 's' : ''}</span>
@@ -461,7 +463,8 @@
       function wireCards(container) {
         container.querySelectorAll('.prop-card').forEach(card => {
           card.addEventListener('click', () => {
-            window.location.href = `GRASP.html?propertyId=${card.dataset.id}`;
+            const module = card.dataset.module || 'GRASP';
+            window.location.href = `${module}.html?propertyId=${card.dataset.id}`;
           });
         });
       }
