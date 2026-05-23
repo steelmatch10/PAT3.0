@@ -468,8 +468,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (scenarios.length === 0) {
       opts.push('<option value="">No scenarios — create one below</option>');
     }
-    // Add blank "new" option at end
-    opts.push('<option value="">+ New scenario</option>');
     els.scenarioSelect.innerHTML = opts.join("");
     if (scenarios.length > 0) els.scenarioSelect.value = scenarios[0].id;
     else els.scenarioSelect.value = "";
