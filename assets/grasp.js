@@ -16,6 +16,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   mainContent.classList.add("visible");
 
   document.getElementById("logoutBtn").addEventListener("click", patSignOut);
+  initProfileWidget(user, member);
 
   // ── URL params ────────────────────────────────────────────────────────────────
   const params     = new URLSearchParams(location.search);

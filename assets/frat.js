@@ -9,6 +9,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const member  = await getCurrentMember();
   const founder = member?.global_role === "founder";
 
+  initProfileWidget(user, member);
+  document.getElementById("logoutBtn").addEventListener("click", patSignOut);
+
   // ── Access check — investor read-only enforcement ────────────────────────────
   const _fratParams   = new URLSearchParams(location.search);
   const _fratPropId   = _fratParams.get("propertyId");
