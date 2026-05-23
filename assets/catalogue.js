@@ -436,18 +436,28 @@ document.addEventListener("DOMContentLoaded", async () => {
         showToast('Select at least one property to pin/unpin.', 'info');
         return;
       }
-      // Determine action: if all selected are already pinned → unpin, otherwise pin
       const selectedProps = allProperties.filter(p => checked.includes(p.id));
-      const allPinned = selectedProps.every(p => p.pinned);
-      const newState = !allPinned;
+      const toPin   = selectedProps.filter(p => !p.pinned).map(p => p.id);
+      const toUnpin = selectedProps.filter(p =>  p.pinned).map(p => p.id);
       pinBtn.disabled = true;
       try {
-        await togglePinProperties(checked, newState);
+        await Promise.all([
+          toPin.length   ? togglePinProperties(toPin,   true)  : Promise.resolve(),
+          toUnpin.length ? togglePinProperties(toUnpin, false) : Promise.resolve(),
+        ]);
         // Update local state without full reload
-        allProperties = allProperties.map(p =>
-          checked.includes(p.id) ? { ...p, pinned: newState } : p
-        );
-        showToast(`${checked.length} propert${checked.length > 1 ? 'ies' : 'y'} ${newState ? 'pinned' : 'unpinned'}.`, 'success');
+        allProperties = allProperties.map(p => {
+          if (toPin.includes(p.id))   return { ...p, pinned: true  };
+          if (toUnpin.includes(p.id)) return { ...p, pinned: false };
+          return p;
+        });
+        const pinnedCount   = toPin.length;
+        const unpinnedCount = toUnpin.length;
+        const msg = [
+          pinnedCount   ? `${pinnedCount} pinned`     : '',
+          unpinnedCount ? `${unpinnedCount} unpinned` : '',
+        ].filter(Boolean).join(', ');
+        showToast(`${msg}.`, 'success');
         render();
       } catch (err) {
         showToast('Failed to update pin state.', 'error');
