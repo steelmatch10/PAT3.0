@@ -73,16 +73,38 @@ async function fetchProperties() {
       zillow_link,
       notes,
       created_at,
-      scenarios(count)
+      updated_at,
+      pinned,
+      scenarios(module, updated_at, archived_at)
     `)
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
   if (error) { console.error('fetchProperties:', error.message); return []; }
-  return (data || []).map(p => ({
-    ...p,
-    scenario_count: p.scenarios?.[0]?.count ?? 0,
-  }));
+  return (data || []).map(p => {
+    const allScenarios = p.scenarios || [];
+    const active = allScenarios.filter(s => !s.archived_at);
+    const latest = active.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+    return {
+      ...p,
+      scenario_count: allScenarios.length,
+      latest_module: latest?.module || 'GRASP',
+    };
+  });
+}
+
+/**
+ * Returns the set of property IDs the current investor has approved access to.
+ * For founders this always returns null (they have universal access).
+ */
+async function fetchApprovedPropertyIds() {
+  const { data, error } = await supabaseClient
+    .from('property_access')
+    .select('property_id')
+    .eq('user_id', (await patGetSession()).user.id)
+    .not('access_approved_at', 'is', null);
+  if (error) { console.error('fetchApprovedPropertyIds:', error.message); return new Set(); }
+  return new Set((data || []).map(r => r.property_id));
 }
 
 async function createProperty(address, zillowLink) {
@@ -93,6 +115,14 @@ async function createProperty(address, zillowLink) {
     .single();
   if (error) throw error;
   return data;
+}
+
+async function togglePinProperties(propertyIds, pinned) {
+  const { error } = await supabaseClient
+    .from('properties')
+    .update({ pinned })
+    .in('id', propertyIds);
+  if (error) throw error;
 }
 
 async function softDeleteProperty(propertyId) {

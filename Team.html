@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PAT 3.0 — Team</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <style>
+    main { padding-bottom: 48px; }
+
+    /* ── Section headings ── */
+    .section-heading {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+      margin: 32px 0 12px;
+    }
+
+    /* ── Member cards ── */
+    .member-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+    }
+    .member-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 22px;
+    }
+    .member-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .member-name {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .member-role-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: var(--chip);
+      color: var(--brand);
+    }
+    .member-role-badge.investor {
+      background: rgba(245,197,66,.12);
+      color: var(--okay);
+    }
+
+    /* ── Editable fields ── */
+    .field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .field-group { display: flex; flex-direction: column; gap: 4px; }
+    .field-group.full { grid-column: 1 / -1; }
+    .field-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      color: var(--muted);
+    }
+    .field-input {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 7px 10px;
+      outline: none;
+      width: 100%;
+    }
+    .field-input:focus { border-color: var(--brand); }
+    .field-input[readonly] {
+      opacity: .6;
+      cursor: default;
+    }
+    .field-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    /* ── Access list (investors only) ── */
+    .access-section {
+      border-top: 1px solid var(--border);
+      margin-top: 14px;
+      padding-top: 14px;
+    }
+    .access-heading {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .access-list { display: flex; flex-direction: column; gap: 6px; }
+    .access-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--panel-2);
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 13px;
+    }
+    .access-row .access-addr { font-weight: 600; color: var(--text); }
+    .access-row .access-role {
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: 8px;
+      padding: 2px 8px;
+      border-radius: 5px;
+      border: 1px solid transparent;
+      cursor: default;
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    .access-row:hover .access-role {
+      color: var(--bad);
+      border-color: var(--bad);
+      background: rgba(239,68,68,.08);
+      cursor: pointer;
+      font-size: 0;
+    }
+    .access-row:hover .access-role::after {
+      content: 'REVOKE';
+      font-size: 11px;
+    }
+    .access-empty { font-size: 13px; color: var(--muted); font-style: italic; }
+
+    /* ── Access panel ── */
+    .access-panel-wrap { position: relative; margin-top: 10px; }
+    .access-panel {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0; right: 0;
+      z-index: 40;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 -8px 28px rgba(0,0,0,.45);
+      max-height: 300px;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .access-panel.open { display: flex; }
+    .access-panel-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .access-panel-item:hover { background: var(--panel-2); }
+    .access-panel-item input[type="checkbox"] {
+      accent-color: var(--brand);
+      width: 15px; height: 15px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .access-panel-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      order: -1;
+    }
+    .access-panel-items {
+      overflow-y: auto;
+      flex: 1;
+      padding: 6px 0;
+    }
+    .manage-access-btn {
+      width: 100%;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 7px 10px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .manage-access-btn:hover { border-color: var(--brand); }
+
+    /* ── Spinner ── */
+    .spinner { text-align: center; padding: 60px; color: var(--muted); font-size: 14px; }
+
+    /* ── Role badge nav ── */
+    .role-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: var(--chip);
+      color: var(--brand);
+    }
+  </style>
+</head>
+<body>
+  <div class="container full">
+    <header class="header">
+      <div class="brand">
+        <div class="logo"></div>
+        <h1>Team</h1>
+      </div>
+      <nav class="nav" style="display:flex;align-items:center;gap:12px;">
+        <span id="userEmail" style="font-size:13px;color:var(--muted);"></span>
+        <span id="roleBadge" class="role-badge"></span>
+        <a class="btn" href="Catalogue.html">Catalogue</a>
+        <a class="btn" href="index.html">Home</a>
+        <button class="btn" id="logoutBtn">Sign out</button>
+      </nav>
+    </header>
+
+    <main>
+      <div id="teamSpinner" class="spinner">Loading team…</div>
+      <div id="teamContent" style="display:none;">
+        <p class="section-heading" data-section="founders">Founders</p>
+        <div id="founderGrid" class="member-grid"></div>
+        <p class="section-heading">Investors</p>
+        <div id="investorGrid" class="member-grid"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/supabase-client.js"></script>
+  <script src="assets/app.js"></script>
+  <script src="assets/team.js"></script>
+</body>
+</html>

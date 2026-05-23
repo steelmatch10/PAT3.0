@@ -15,6 +15,11 @@ primer.md
 memory.sh
 .claude-memory.md
 
+# Ruflo prompt engineering & evaluation scaffolding
+docs/
+evaluations/
+prompts/
+
 # Dependencies
 node_modules/
 

@@ -518,6 +518,207 @@ function openPrintableCatalogue(props) {
   };
 })();
 
+// ── Profile widget ────────────────────────────────────────────────────────────
+// Call initProfileWidget(user, member) after auth resolves on any page.
+// Expects #userEmail and #roleBadge elements in the nav.
+window.initProfileWidget = function(user, member) {
+  const emailEl = document.getElementById('userEmail');
+  if (!emailEl) return;
+
+  // Inject styles once
+  if (!document.getElementById('profile-widget-styles')) {
+    const style = document.createElement('style');
+    style.id = 'profile-widget-styles';
+    style.textContent = `
+      .profile-trigger {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        padding: 3px 6px;
+        border-radius: 8px;
+        transition: background .15s;
+      }
+      .profile-trigger:hover { background: var(--panel-2); }
+      .profile-trigger .profile-email {
+        font-size: 13px;
+        color: var(--muted);
+        transition: color .15s;
+      }
+      .profile-trigger:hover .profile-email { color: var(--text); }
+      .profile-trigger .profile-hint {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--brand);
+        opacity: 0;
+        max-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        transition: opacity .2s, max-width .2s;
+      }
+      .profile-trigger:hover .profile-hint {
+        opacity: 1;
+        max-width: 160px;
+      }
+      .profile-panel {
+        display: none;
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        z-index: 200;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        width: 280px;
+        box-shadow: 0 8px 28px rgba(0,0,0,.45);
+      }
+      .profile-panel.open { display: block; }
+      .profile-panel h4 {
+        margin: 0 0 12px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .profile-field { margin-bottom: 10px; }
+      .profile-field label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      .profile-field input {
+        width: 100%;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 13px;
+        padding: 7px 10px;
+        outline: none;
+        box-sizing: border-box;
+      }
+      .profile-field input:focus { border-color: var(--brand); }
+      .profile-field input[readonly] { opacity: .5; cursor: default; }
+      .profile-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 12px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Wrap the email span in a trigger
+  const trigger = document.createElement('div');
+  trigger.className = 'profile-trigger';
+  trigger.style.position = 'relative';
+  emailEl.parentNode.insertBefore(trigger, emailEl);
+  trigger.appendChild(emailEl);
+  emailEl.className = 'profile-email';
+  emailEl.textContent = user.email;
+
+  const hint = document.createElement('span');
+  hint.className = 'profile-hint';
+  hint.textContent = 'Update Details';
+  trigger.appendChild(hint);
+
+  // Panel
+  const panel = document.createElement('div');
+  panel.className = 'profile-panel';
+  panel.innerHTML = `
+    <h4>Contact Details</h4>
+    <div class="profile-field">
+      <label>First Name</label>
+      <input id="pf-first" type="text" value="${member?.first_name || ''}" placeholder="First name" />
+    </div>
+    <div class="profile-field">
+      <label>Last Name</label>
+      <input id="pf-last" type="text" value="${member?.last_name || ''}" placeholder="Last name" />
+    </div>
+    <div class="profile-field">
+      <label>Primary Email</label>
+      <input id="pf-email" type="email" value="${user.email}" readonly />
+    </div>
+    <div class="profile-field">
+      <label>Secondary Email</label>
+      <input id="pf-email2" type="email" value="${member?.email_secondary || ''}" placeholder="Optional" />
+    </div>
+    <div class="profile-field">
+      <label>Primary Phone</label>
+      <input id="pf-phone1" type="tel" value="${member?.phone_primary || ''}" placeholder="" />
+    </div>
+    <div class="profile-field">
+      <label>Secondary Phone</label>
+      <input id="pf-phone2" type="tel" value="${member?.phone_secondary || ''}" placeholder="Optional" />
+    </div>
+    <div class="profile-actions">
+      <button class="btn" id="pf-cancel" style="font-size:12px;padding:5px 12px;">Cancel</button>
+      <button class="btn" id="pf-save" style="font-size:12px;padding:5px 12px;background:var(--brand);color:#0e1220;font-weight:700;">Save</button>
+    </div>`;
+  trigger.appendChild(panel);
+
+  // Toggle open/close
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    panel.classList.toggle('open');
+  });
+  panel.addEventListener('click', e => e.stopPropagation());
+  document.addEventListener('click', () => panel.classList.remove('open'));
+
+  panel.querySelector('#pf-cancel').addEventListener('click', () => panel.classList.remove('open'));
+
+  // Mark primary phone as required (except Daanish)
+  const phoneRequired = user.email !== 'dan.daanish@gmail.com';
+  if (phoneRequired) {
+    const phoneLabel = panel.querySelector('label[for="pf-phone1"]') ||
+      [...panel.querySelectorAll('.profile-field label')].find(l => l.textContent === 'Primary Phone');
+    if (phoneLabel) phoneLabel.textContent = 'Primary Phone *';
+  }
+
+  panel.querySelector('#pf-save').addEventListener('click', async () => {
+    const saveBtn   = panel.querySelector('#pf-save');
+    const phone1Val = panel.querySelector('#pf-phone1').value.trim();
+
+    if (phoneRequired && !phone1Val) {
+      panel.querySelector('#pf-phone1').style.borderColor = 'var(--bad)';
+      showToast('Primary phone number is required.', 'error');
+      return;
+    }
+    panel.querySelector('#pf-phone1').style.borderColor = '';
+
+    const updates = {
+      first_name:      panel.querySelector('#pf-first').value.trim()  || null,
+      last_name:       panel.querySelector('#pf-last').value.trim()   || null,
+      email_secondary: panel.querySelector('#pf-email2').value.trim() || null,
+      phone_primary:   phone1Val || null,
+      phone_secondary: panel.querySelector('#pf-phone2').value.trim() || null,
+      updated_at:      new Date().toISOString(),
+    };
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    const { error } = await supabaseClient
+      .from('team_members')
+      .update(updates)
+      .eq('user_id', user.id);
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
+    if (error) {
+      showToast('Failed to save.', 'error');
+    } else {
+      // Update cached member
+      if (window._patCurrentMember) Object.assign(window._patCurrentMember, updates);
+      panel.classList.remove('open');
+      showToast('Profile updated.', 'success');
+    }
+  });
+};
+
 // CommonJS exports for Jest test environments (no-op in browser)
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {

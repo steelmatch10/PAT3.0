@@ -1,5 +1,25 @@
 /* FRAT page behavior — fixed Monthly/Annual toggle */
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  window._patCurrentMember = null;
+
+  // ── Auth gate ────────────────────────────────────────────────────────────────
+  const user = await initAuth();
+  if (!user) return; // redirected to login.html
+
+  const member  = await getCurrentMember();
+  const founder = member?.global_role === "founder";
+
+  // ── Access check — investor read-only enforcement ────────────────────────────
+  const _fratParams   = new URLSearchParams(location.search);
+  const _fratPropId   = _fratParams.get("propertyId");
+  let readOnly = false;
+  if (!founder && _fratPropId) {
+    const approvedIds = await fetchApprovedPropertyIds();
+    if (!approvedIds.has(_fratPropId)) {
+      readOnly = true;
+    }
+  }
+
   const els = {
     address: document.getElementById("address"),
     link: document.getElementById("link"),
@@ -39,6 +59,15 @@ document.addEventListener("DOMContentLoaded", () => {
   let isDirty = false;
 
   initPlaceholders();
+
+  if (readOnly) {
+    document.getElementById("readOnlyBanner").style.display = "block";
+    document.querySelectorAll("input, select, textarea").forEach(el => {
+      el.disabled = true;
+    });
+    els.addOrSaveBtn.style.display = "none";
+    els.clearBtn.style.display     = "none";
+  }
 
   if (!isEditMode) {
     hardResetForm();

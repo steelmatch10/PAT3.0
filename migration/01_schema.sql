@@ -14,6 +14,7 @@ CREATE TABLE properties (
   updated_at TIMESTAMP DEFAULT NOW(),
   created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   deleted_at TIMESTAMP,
+  pinned BOOLEAN DEFAULT false,
   CONSTRAINT address_unique UNIQUE(address)
 );
 
@@ -74,6 +75,11 @@ CREATE TABLE team_members (
   user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
   global_role TEXT NOT NULL CHECK (global_role IN ('founder', 'investor')),
   email TEXT NOT NULL,
+  first_name TEXT,
+  last_name TEXT,
+  phone_primary TEXT,
+  phone_secondary TEXT,
+  email_secondary TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -107,27 +113,16 @@ $$;
 CREATE POLICY "founders_all_properties" ON properties
   FOR ALL USING (get_my_role() = 'founder');
 
-CREATE POLICY "investors_approved_properties" ON properties
-  FOR SELECT USING (
-    get_my_role() = 'investor'
-    AND id IN (
-      SELECT property_id FROM property_access
-      WHERE user_id = auth.uid() AND access_approved_at IS NOT NULL
-    )
-  );
+CREATE POLICY "investors_read_all_properties" ON properties
+  FOR SELECT USING (get_my_role() = 'investor');
 
 -- SCENARIOS
 CREATE POLICY "founders_all_scenarios" ON scenarios
   FOR ALL USING (get_my_role() = 'founder');
 
-CREATE POLICY "investors_select_approved_scenarios" ON scenarios
-  FOR SELECT USING (
-    get_my_role() = 'investor'
-    AND property_id IN (
-      SELECT property_id FROM property_access
-      WHERE user_id = auth.uid() AND access_approved_at IS NOT NULL
-    )
-  );
+-- Investors can read ALL scenarios (read-only); write ops remain gated to approved properties below
+CREATE POLICY "investors_read_all_scenarios" ON scenarios
+  FOR SELECT USING (get_my_role() = 'investor');
 
 CREATE POLICY "investors_insert_approved_scenarios" ON scenarios
   FOR INSERT WITH CHECK (
@@ -160,9 +155,28 @@ CREATE POLICY "investors_delete_approved_scenarios" ON scenarios
 CREATE POLICY "founders_manage_property_access" ON property_access
   FOR ALL USING (get_my_role() = 'founder');
 
+-- Investors can read their own access rows (needed so frontend can identify approved properties)
+CREATE POLICY "investors_read_own_property_access" ON property_access
+  FOR SELECT USING (
+    get_my_role() = 'investor'
+    AND user_id = auth.uid()
+  );
+
 -- TEAM_MEMBERS: any authenticated user reads their own row (bootstraps role check)
 CREATE POLICY "users_read_own_team_member" ON team_members
   FOR SELECT USING (auth.uid() = user_id);
+
+-- TEAM_MEMBERS: any authenticated user can update their own row (profile widget)
+CREATE POLICY "users_update_own_team_member" ON team_members
+  FOR UPDATE USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- TEAM_MEMBERS: investors can read founder rows (for "Your Team" contact section)
+CREATE POLICY "investors_read_founders" ON team_members
+  FOR SELECT USING (
+    get_my_role() = 'investor'
+    AND global_role = 'founder'
+  );
 
 -- TEAM_MEMBERS: founders manage all rows
 CREATE POLICY "founders_manage_team_members" ON team_members

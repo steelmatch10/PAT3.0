@@ -3,20 +3,82 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PAT 3.0 — Properties</title>
+  <title>PAT 3.0</title>
   <link rel="stylesheet" href="assets/styles.css" />
   <style>
+    /* ── Layout ── */
+    main { padding-bottom: 48px; }
+
+    .welcome {
+      margin: 8px 0 32px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .12em;
+    }
+    .welcome .name-line {
+      color: var(--brand);
+    }
+
+    .section-heading {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+      margin: 36px 0 12px;
+    }
+
+    /* ── Module picker (founders) ── */
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .module-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px 24px;
+      cursor: pointer;
+      transition: border-color .15s, transform .15s;
+      text-decoration: none;
+      display: block;
+    }
+    .module-card:hover {
+      border-color: var(--brand);
+      transform: translateY(-2px);
+      text-decoration: none;
+    }
+    .module-card .module-icon {
+      font-size: 28px;
+      margin-bottom: 12px;
+    }
+    .module-card h3 {
+      margin: 0 0 6px;
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .module-card p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── Recent / interest property cards ── */
     .prop-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-      gap: 16px;
-      margin-top: 24px;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
     }
     .prop-card {
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 20px;
+      padding: 18px 20px;
       cursor: pointer;
       transition: border-color .15s, transform .15s;
     }
@@ -25,44 +87,75 @@
       transform: translateY(-2px);
     }
     .prop-card h3 {
-      margin: 0 0 8px;
-      font-size: 16px;
+      margin: 0 0 6px;
+      font-size: 15px;
       font-weight: 700;
       color: var(--text);
     }
     .prop-meta {
-      font-size: 13px;
+      font-size: 12px;
       color: var(--muted);
       display: flex;
-      gap: 16px;
+      gap: 14px;
       flex-wrap: wrap;
     }
     .prop-meta span { white-space: nowrap; }
-    .prop-link {
-      margin-top: 10px;
-      font-size: 12px;
+    .prop-link { margin-top: 8px; font-size: 12px; }
+
+    .interest-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      padding: 2px 7px;
+      border-radius: 5px;
+      background: rgba(245,197,66,.15);
+      color: var(--okay);
+      margin-top: 8px;
     }
-    .empty-state {
-      text-align: center;
-      color: var(--muted);
-      padding: 80px 0;
-    }
-    .empty-state p { font-size: 15px; }
-    .toolbar {
+
+    /* ── CTA banner (investor → catalogue) ── */
+    .cta-banner {
+      margin-top: 36px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px 28px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      justify-content: space-between;
+      gap: 20px;
       flex-wrap: wrap;
     }
-    .toolbar h2 {
-      margin: 0;
-      flex: 1;
-      font-size: 20px;
+    .cta-banner .cta-text h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
       font-weight: 700;
     }
-    #newPropBtn {
-      display: none;
+    .cta-banner .cta-text p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
     }
+
+    /* ── Nav & role badge ── */
+    .role-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: var(--chip);
+      color: var(--brand);
+    }
+    .role-badge.investor {
+      background: rgba(245,197,66,.12);
+      color: var(--okay);
+    }
+
+    /* ── New property modal ── */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -72,9 +165,7 @@
       align-items: center;
       justify-content: center;
     }
-    .modal-overlay.visible {
-      display: flex;
-    }
+    .modal-overlay.visible { display: flex; }
     .modal-box {
       background: var(--panel);
       border: 1px solid var(--border);
@@ -83,14 +174,8 @@
       width: 100%;
       max-width: 440px;
     }
-    .modal-box h3 {
-      margin: 0 0 20px;
-      font-size: 18px;
-      font-weight: 700;
-    }
-    .modal-box .form-group {
-      margin-bottom: 14px;
-    }
+    .modal-box h3 { margin: 0 0 20px; font-size: 18px; font-weight: 700; }
+    .modal-box .form-group { margin-bottom: 14px; }
     .modal-box label {
       display: block;
       font-size: 12px;
@@ -111,33 +196,11 @@
       outline: none;
     }
     .modal-box input:focus { border-color: var(--brand); }
-    .modal-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 20px;
-    }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
     .modal-actions button { flex: 1; }
-    .spinner {
-      display: none;
-      text-align: center;
-      padding: 60px;
-      color: var(--muted);
-    }
+
+    .spinner { display: none; text-align: center; padding: 60px; color: var(--muted); }
     .spinner.visible { display: block; }
-    .role-badge {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      padding: 3px 8px;
-      border-radius: 6px;
-      background: var(--chip);
-      color: var(--brand);
-    }
-    .role-badge.investor {
-      background: rgba(245,197,66,.12);
-      color: var(--okay);
-    }
   </style>
 </head>
 <body>
@@ -150,27 +213,71 @@
       <nav class="nav" style="display:flex;align-items:center;gap:12px;">
         <span id="userEmail" style="font-size:13px;color:var(--muted);"></span>
         <span id="roleBadge" class="role-badge"></span>
-        <a class="btn" href="Catalogue.html">Catalogue</a>
+        <a class="btn" href="Catalogue.html" id="catalogueNavBtn">Catalogue</a>
+        <a class="btn" href="Team.html" id="teamNavBtn" style="display:none;">Team</a>
         <button class="btn" id="logoutBtn">Sign out</button>
       </nav>
     </header>
 
     <main>
-      <div class="toolbar">
-        <h2>Properties</h2>
-        <button class="btn" id="newPropBtn">+ New Property</button>
+      <div class="spinner visible" id="spinner"></div>
+
+      <!-- ── FOUNDER VIEW ───────────────────────────────────────────── -->
+      <div id="founderView" style="display:none;">
+        <p class="welcome">Welcome Back, <span class="name-line" id="founderNameDisplay"></span></p>
+
+        <p class="section-heading">Start an analysis</p>
+        <div class="module-grid">
+          <a class="module-card" href="GRASP.html" id="graspCard">
+            <div class="module-icon">📊</div>
+            <h3>GRASP</h3>
+            <p>Rental &amp; income property analysis — mortgage, cash-on-cash return, cap rate, DSCR.</p>
+          </a>
+          <a class="module-card" href="FRAT.html">
+            <div class="module-icon">🔨</div>
+            <h3>FRAT</h3>
+            <p>Fix-and-flip analysis — acquisition + rehab costs, ARV, ROI, holding period.</p>
+          </a>
+        </div>
+
+        <div id="recentSection" style="display:none;">
+          <p class="section-heading">Pick up where you left off</p>
+          <div id="recentGrid" class="prop-grid"></div>
+        </div>
+
+        <div style="margin-top:20px;">
+          <button class="btn" id="newPropBtn" style="display:none;">+ New Property</button>
+        </div>
       </div>
 
-      <div class="spinner visible" id="spinner">Loading properties…</div>
-      <div id="propGrid" class="prop-grid" style="display:none;"></div>
-      <div class="empty-state" id="emptyState" style="display:none;">
-        <p>No properties found.</p>
-        <p id="emptyHint" style="font-size:13px;"></p>
+      <!-- ── INVESTOR VIEW ──────────────────────────────────────────── -->
+      <div id="investorView" style="display:none;">
+        <p class="welcome">Welcome, <span class="name-line" id="investorNameDisplay"></span></p>
+
+        <div id="interestSection" style="display:none;">
+          <p class="section-heading">Properties of Interest</p>
+          <div id="interestGrid" class="prop-grid"></div>
+        </div>
+
+        <div id="noInterestMsg" style="display:none;color:var(--muted);font-size:14px;margin-top:16px;">
+          No properties have been enabled for you yet. Check back soon.
+        </div>
+
+        <div class="cta-banner">
+          <div class="cta-text">
+            <h3>Explore the full portfolio</h3>
+            <p>Browse all properties and their analysis scenarios in the Catalogue.</p>
+          </div>
+          <a class="btn" href="Catalogue.html" style="white-space:nowrap;">View Catalogue →</a>
+        </div>
+
+        <p class="section-heading" style="margin-top:36px;">Your Team</p>
+        <div id="founderContacts" class="prop-grid"></div>
       </div>
     </main>
   </div>
 
-  <!-- New Property Modal -->
+  <!-- New Property Modal (founders only) -->
   <div class="modal-overlay" id="newPropModal">
     <div class="modal-box">
       <h3>Add Property</h3>
@@ -193,100 +300,175 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="assets/supabase-config.js"></script>
   <script src="assets/supabase-client.js"></script>
+  <script src="assets/app.js"></script>
   <script>
     (async () => {
+      window._patCurrentMember = null;
+
       const user = await initAuth();
       if (!user) return;
 
       const member = await getCurrentMember();
       const founder = member?.global_role === 'founder';
+      const investor = member?.global_role === 'investor';
 
-      // Show user info
+      // Header user info
       document.getElementById('userEmail').textContent = user.email;
       const badge = document.getElementById('roleBadge');
       badge.textContent = member?.global_role ?? 'member';
-      if (member?.global_role === 'investor') badge.classList.add('investor');
-
-      // Show New Property button for founders
-      if (founder) document.getElementById('newPropBtn').style.display = 'block';
+      if (investor) badge.classList.add('investor');
 
       document.getElementById('logoutBtn').addEventListener('click', patSignOut);
+      if (investor) document.getElementById('catalogueNavBtn').style.display = 'none';
+      if (founder) document.getElementById('teamNavBtn').style.display = 'inline-flex';
+      initProfileWidget(user, member);
 
-      // ── Load properties ────────────────────────────────────────────────────
-      const spinner    = document.getElementById('spinner');
-      const grid       = document.getElementById('propGrid');
-      const emptyState = document.getElementById('emptyState');
+      const spinner = document.getElementById('spinner');
 
-      const properties = await fetchProperties();
-      spinner.classList.remove('visible');
+      // ── FOUNDER ─────────────────────────────────────────────────────────────
+      if (founder) {
+        const firstName = member.first_name || user.email.split('@')[0];
+        document.getElementById('founderNameDisplay').textContent = firstName;
 
-      if (properties.length === 0) {
-        emptyState.style.display = 'block';
-        document.getElementById('emptyHint').textContent = founder
-          ? 'Click "+ New Property" to add your first property.'
-          : 'No properties have been shared with you yet.';
-        return;
-      }
+        const newPropBtn = document.getElementById('newPropBtn');
+        newPropBtn.style.display = 'inline-block';
 
-      grid.style.display = 'grid';
-      grid.innerHTML = properties.map(p => `
-        <div class="prop-card" data-id="${p.id}" data-address="${escapeHtml(p.address)}">
-          <h3>${escapeHtml(p.address)}</h3>
-          <div class="prop-meta">
-            <span>${p.scenario_count} scenario${p.scenario_count !== 1 ? 's' : ''}</span>
-            <span>Added ${formatDate(p.created_at)}</span>
-          </div>
-          ${p.zillow_link ? `<div class="prop-link"><a href="${escapeHtml(p.zillow_link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">View on Zillow ↗</a></div>` : ''}
-        </div>
-      `).join('');
+        // Load recent properties (last 5 by updated_at)
+        const allProps = await fetchProperties();
+        spinner.classList.remove('visible');
+        document.getElementById('founderView').style.display = 'block';
 
-      grid.querySelectorAll('.prop-card').forEach(card => {
-        card.addEventListener('click', () => {
-          window.location.href = `GRASP.html?propertyId=${card.dataset.id}`;
-        });
-      });
+        const recent = [...allProps]
+          .sort((a, b) => {
+            const pinDiff = (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
+            if (pinDiff !== 0) return pinDiff;
+            return new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at);
+          })
+          .slice(0, 5);
 
-      // ── New Property Modal ────────────────────────────────────────────────
-      const modal      = document.getElementById('newPropModal');
-      const addrInput  = document.getElementById('newAddress');
-      const linkInput  = document.getElementById('newZillowLink');
-      const errEl      = document.getElementById('newPropError');
-      const saveBtn    = document.getElementById('newPropSave');
-
-      document.getElementById('newPropBtn').addEventListener('click', () => {
-        addrInput.value = '';
-        linkInput.value = '';
-        errEl.style.display = 'none';
-        modal.classList.add('visible');
-        addrInput.focus();
-      });
-      document.getElementById('newPropCancel').addEventListener('click', () => {
-        modal.classList.remove('visible');
-      });
-      modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('visible'); });
-
-      saveBtn.addEventListener('click', async () => {
-        const address = addrInput.value.trim();
-        if (!address) { showErr('Address is required.'); return; }
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Creating…';
-        errEl.style.display = 'none';
-        try {
-          const { id } = await createProperty(address, linkInput.value.trim());
-          window.location.href = `GRASP.html?propertyId=${id}&newScenario=1`;
-        } catch (err) {
-          showErr(err.message || 'Failed to create property.');
-          saveBtn.disabled = false;
-          saveBtn.textContent = 'Create';
+        if (recent.length > 0) {
+          document.getElementById('recentSection').style.display = 'block';
+          const recentGrid = document.getElementById('recentGrid');
+          recentGrid.innerHTML = recent.map(p => propCardHtml(p, false)).join('');
+          wireCards(recentGrid);
         }
-      });
 
-      function showErr(msg) {
-        errEl.textContent = msg;
-        errEl.style.display = 'block';
+        // Wire GRASP card to open a property picker (just go to GRASP landing for now)
+        // New Property modal
+        const modal     = document.getElementById('newPropModal');
+        const addrInput = document.getElementById('newAddress');
+        const linkInput = document.getElementById('newZillowLink');
+        const errEl     = document.getElementById('newPropError');
+        const saveBtn   = document.getElementById('newPropSave');
+
+        newPropBtn.addEventListener('click', () => {
+          addrInput.value = '';
+          linkInput.value = '';
+          errEl.style.display = 'none';
+          modal.classList.add('visible');
+          addrInput.focus();
+        });
+        document.getElementById('newPropCancel').addEventListener('click', () => modal.classList.remove('visible'));
+        modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('visible'); });
+
+        saveBtn.addEventListener('click', async () => {
+          const address = addrInput.value.trim();
+          if (!address) { showErr('Address is required.'); return; }
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Creating…';
+          errEl.style.display = 'none';
+          try {
+            const { id } = await createProperty(address, linkInput.value.trim());
+            window.location.href = `GRASP.html?propertyId=${id}&newScenario=1`;
+          } catch (err) {
+            const msg = err.message?.includes('address_unique')
+              ? 'A property with this address already exists.'
+              : (err.message || 'Failed to create property.');
+            showErr(msg);
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Create';
+          }
+        });
+
+        function showErr(msg) {
+          errEl.textContent = msg;
+          errEl.style.display = 'block';
+        }
       }
 
-      // ── Helpers ────────────────────────────────────────────────────────────
+      // ── INVESTOR ─────────────────────────────────────────────────────────────
+      if (investor) {
+        const firstName = member.first_name || user.email.split('@')[0];
+        document.getElementById('investorNameDisplay').textContent = firstName;
+
+        const [allProps, approvedIds] = await Promise.all([
+          fetchProperties(),
+          fetchApprovedPropertyIds(),
+        ]);
+
+        // Fetch founder contact details for the investor's "Your Team" section
+        const { data: founderMembers } = await supabaseClient
+          .from('team_members')
+          .select('first_name, last_name, email, email_secondary, phone_primary, phone_secondary')
+          .eq('global_role', 'founder');
+
+        spinner.classList.remove('visible');
+        document.getElementById('investorView').style.display = 'block';
+
+        // Render founder contact cards
+        const founderContactsEl = document.getElementById('founderContacts');
+        if (founderMembers?.length) {
+          founderContactsEl.innerHTML = founderMembers.map(f => {
+            const name = [f.first_name, f.last_name].filter(Boolean).join(' ') || f.email;
+            const lines = [
+              f.email,
+              f.email_secondary,
+              f.phone_primary,
+              f.phone_secondary,
+            ].filter(Boolean);
+            return `
+              <div class="prop-card" style="cursor:default;">
+                <h3 style="font-size:15px;margin-bottom:8px;">${escapeHtml(name)}</h3>
+                ${lines.map(l => `<div style="font-size:13px;color:var(--muted);margin-bottom:3px;">${escapeHtml(l)}</div>`).join('')}
+              </div>`;
+          }).join('');
+        }
+
+        const approved = allProps.filter(p => approvedIds.has(p.id));
+
+        if (approved.length > 0) {
+          document.getElementById('interestSection').style.display = 'block';
+          const grid = document.getElementById('interestGrid');
+          grid.innerHTML = approved.map(p => propCardHtml(p, true)).join('');
+          wireCards(grid);
+        } else {
+          document.getElementById('noInterestMsg').style.display = 'block';
+        }
+      }
+
+      // ── Shared helpers ────────────────────────────────────────────────────────
+      function propCardHtml(p, showBadge) {
+        return `
+          <div class="prop-card" data-id="${p.id}" data-module="${p.latest_module || 'GRASP'}">
+            <h3>${escapeHtml(p.address)}${founder && p.pinned ? ' <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:5px;background:rgba(110,168,254,.15);color:var(--brand);vertical-align:middle;">Pinned</span>' : ''}</h3>
+            <div class="prop-meta">
+              <span>${p.scenario_count} scenario${p.scenario_count !== 1 ? 's' : ''}</span>
+              <span>Updated ${formatDate(p.updated_at || p.created_at)}</span>
+            </div>
+            ${p.zillow_link ? `<div class="prop-link"><a href="${escapeHtml(p.zillow_link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">View on Zillow ↗</a></div>` : ''}
+            ${showBadge ? '<div class="interest-badge">Scenario editing enabled</div>' : ''}
+          </div>`;
+      }
+
+      function wireCards(container) {
+        container.querySelectorAll('.prop-card').forEach(card => {
+          card.addEventListener('click', () => {
+            const module = card.dataset.module || 'GRASP';
+            window.location.href = `${module}.html?propertyId=${card.dataset.id}`;
+          });
+        });
+      }
+
       function escapeHtml(s) {
         return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
       }
