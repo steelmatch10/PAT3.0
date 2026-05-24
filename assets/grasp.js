@@ -172,6 +172,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ── Scenario selector (when propertyId is in URL) ────────────────────────────
   let allScenarios = [];
   let currentProperty = null;
+  let lastSavedSnapshot = null;
 
   if (propertyId) {
     els.scenarioBar.style.display = "flex";
@@ -355,11 +356,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         history.replaceState({}, "", newUrl.toString());
         els.scenarioBar.style.display = "flex";
       }
+      lastSavedSnapshot = JSON.stringify(collectFormNormalized());
     } catch (err) {
       showSaveError(err.message || "Failed to save scenario.");
     }
 
-    els.addOrSaveBtn.disabled = false;
+    els.addOrSaveBtn.disabled = (lastSavedSnapshot !== null && JSON.stringify(collectFormNormalized()) === lastSavedSnapshot);
     els.addOrSaveBtn.textContent = "Save Scenario";
   });
 
@@ -376,6 +378,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function clearFormForNew(defaults = {}) {
     currentScenarioId = null;
+    lastSavedSnapshot = null;
     els.scenarioName.value        = "";
     els.scenarioDescription.value = "";
     els.address.value             = defaults.address ?? "";
@@ -418,8 +421,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     els.scenarioName.value        = scenario.scenario_name || "";
     els.scenarioDescription.value = scenario.scenario_description || "";
-    els.address.value             = "";  // address lives on property, not shown here yet
-    els.link.value                = "";
+    els.address.value             = currentProperty?.address    ?? "";
+    els.link.value                = currentProperty?.zillow_link ?? "";
     els.propertyValue.value       = inp.propertyValue ?? "";
     els.percentDownPct.value      = inp.percentDownPct ?? "";
     els.rateAprPct.value          = inp.rateAprPct ?? "";
@@ -475,6 +478,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     hideSaveError();
     triggerCompute();
+    lastSavedSnapshot = JSON.stringify(collectFormNormalized());
+    els.addOrSaveBtn.disabled = true;
   }
 
   function renderScenarioSelect(scenarios) {
@@ -584,6 +589,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderDSCRGuide(kpi);
     renderSuggestedRent(kpi);
     renderSupplemental(kpi, f);
+    if (lastSavedSnapshot !== null) {
+      els.addOrSaveBtn.disabled = (JSON.stringify(f) === lastSavedSnapshot);
+    }
   }
 
   function renderKPIs(k) {
