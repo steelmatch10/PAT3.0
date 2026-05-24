@@ -19,12 +19,20 @@ const path = require('path');
 const { parse } = require('csv-parse/sync');
 const { createClient } = require('@supabase/supabase-js');
 
+// Load .env from project root (no dotenv dependency needed)
+const envPath = path.join(__dirname, '..', '.env');
+if (fs.existsSync(envPath)) {
+  fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+    const m = line.match(/^\s*([^#=][^=]*)=(.*)$/);
+    if (m && !process.env[m[1].trim()]) process.env[m[1].trim()] = m[2].trim();
+  });
+}
+
 // ── CONFIG ─────────────────────────────────────────────────────────────────────
-// Fill these in before running, or set as env vars.
 const CONFIG = {
-  SUPABASE_URL:         process.env.SUPABASE_URL         || 'https://YOUR_PROJECT.supabase.co',
+  SUPABASE_URL:         process.env.SUPABASE_URL         || (process.env.SUPABASE_PROJECT_ID ? `https://${process.env.SUPABASE_PROJECT_ID}.supabase.co` : 'https://YOUR_PROJECT.supabase.co'),
   SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SECRET_SERVICE_ROLE || 'YOUR_SERVICE_ROLE_KEY',
-  FOUNDER_USER_ID:      process.env.FOUNDER_USER_ID      || 'YOUR_FOUNDER_UUID',  // dmalde1998@gmail.com
+  FOUNDER_USER_ID:      process.env.FOUNDER_USER_ID      || 'YOUR_FOUNDER_UUID',
   CSV_PATH: path.join(__dirname, 'Property Analysis Tools (PAT) - (Gauging Rental Asset Strength & Potential) GRASP.csv'),
   DRY_RUN: process.env.DRY_RUN === 'true',  // set DRY_RUN=true to preview without writing
 };
@@ -112,13 +120,16 @@ function computeAll(input) {
   const grossRentMonthly        = units * rentPerUnitMonthly;
   const operatingExpensesMonthly = taxesMonthly + insuranceMonthly + hoaMonthly + miscMonthly;
   const ownershipCostMonthly    = operatingExpensesMonthly + mortgageMonthly;
-  const noiAnnual               = (grossRentMonthly - operatingExpensesMonthly) * 12;
-  const annualCashFlow          = (grossRentMonthly - ownershipCostMonthly) * 12;
+  // 10% vacancy factor applied to gross rent (mirrors PAT 2.0 workbook)
+  const effectiveRentMonthly    = grossRentMonthly * 0.90;
+  const noiAnnual               = (effectiveRentMonthly - operatingExpensesMonthly) * 12;
+  const annualCashFlow          = (effectiveRentMonthly - ownershipCostMonthly) * 12;
   const totalInitialInvestment  = downPayment + estImprovementCost + closingCosts;
 
   const capRate    = propertyValue > 0 ? noiAnnual / propertyValue : NaN;
   const cashOnCash = totalInitialInvestment > 0 ? annualCashFlow / totalInitialInvestment : NaN;
-  const dscr       = mortgageMonthly > 0 ? noiAnnual / (mortgageMonthly * 12) : NaN;
+  // DSCR uses 80% of NOI — conservative lending standard (PAT 2.0: NOI_80% column)
+  const dscr       = mortgageMonthly > 0 ? (noiAnnual * 0.80) / (mortgageMonthly * 12) : NaN;
 
   function priceForDSCR(target) {
     if (target <= 0) return NaN;

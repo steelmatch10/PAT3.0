@@ -107,6 +107,16 @@ async function fetchApprovedPropertyIds() {
   return new Set((data || []).map(r => r.property_id));
 }
 
+async function fetchProperty(propertyId) {
+  const { data, error } = await supabaseClient
+    .from('properties')
+    .select('id, address, zillow_link')
+    .eq('id', propertyId)
+    .single();
+  if (error) { console.error('fetchProperty:', error.message); return null; }
+  return data;
+}
+
 async function createProperty(address, zillowLink) {
   const { data, error } = await supabaseClient
     .from('properties')

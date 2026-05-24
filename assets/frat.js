@@ -9,6 +9,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const member  = await getCurrentMember();
   const founder = member?.global_role === "founder";
 
+  initProfileWidget(user, member);
+  document.getElementById("logoutBtn").addEventListener("click", patSignOut);
+
   // ── Access check — investor read-only enforcement ────────────────────────────
   const _fratParams   = new URLSearchParams(location.search);
   const _fratPropId   = _fratParams.get("propertyId");
@@ -52,11 +55,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     moreDetails: document.getElementById("moreDetails"),
   };
 
-  const params = new URLSearchParams(location.search);
-  let editId = params.get("edit");
-  let isEditMode = !!editId;
   let lastSavedSnapshot = null;
   let isDirty = false;
+  let currentScenarioId = null;
 
   initPlaceholders();
 
@@ -69,44 +70,48 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.clearBtn.style.display     = "none";
   }
 
-  if (!isEditMode) {
-    hardResetForm();
-  }
+  if (_fratPropId) {
+    const [scenarios, prop] = await Promise.all([
+      fetchScenarios(_fratPropId),
+      fetchProperty(_fratPropId),
+    ]);
 
-  // Load edit if present
-  if (isEditMode) {
-    const cat = getCatalog();
-    const found = (cat.properties || []).find(p => p.id === editId);
-    if (found && found.module === "FRAT") {
-      els.addOrSaveBtn.textContent = "Save Changes";
-      const i = found.inputs || {};
-      els.address.value = found.source?.address || "";
-      els.link.value = found.source?.link || "";
-      els.propertyValue.value = i.propertyValue ?? "";
-      els.percentDownPct.value = i.percentDownPct ?? "";
-      els.rateAprPct.value = i.rateAprPct ?? "";
-      els.loanLengthYears.value = i.loanLengthYears ?? 30;
-      els.estFixingCost.value = i.estFixingCost ?? "";
-      els.taxesMonthly.value = i.taxesMonthly ?? "";
-      els.insuranceMonthly.value = i.insuranceMonthly ?? "";
-      els.hoaMonthly.value = i.hoaMonthly ?? "";
-      els.monthsHold.value = i.monthsHold ?? "";
-      els.desiredARV.value = i.desiredARV ?? "";
-      els.interestOnlyToggle.checked = !!i.interestOnly;
+    if (scenarios.length > 0) {
+      const s = scenarios[0];
+      currentScenarioId = s.id;
+      const inp = s.inputs || {};
 
-      // Always store/display carry costs in monthly; set toggle state accordingly
-      els.viewModeToggle.checked = false;
+      els.address.value         = prop?.address      ?? "";
+      els.link.value            = prop?.zillow_link  ?? "";
+      els.propertyValue.value   = inp.propertyValue  ?? "";
+      els.percentDownPct.value  = inp.percentDownPct ?? "";
+      els.rateAprPct.value      = inp.rateAprPct     ?? "";
+      els.loanLengthYears.value = inp.loanLengthYears ?? 30;
+      els.estFixingCost.value   = inp.estFixingCost  ?? "";
+      els.monthsHold.value      = inp.monthsHold     ?? "";
+      els.desiredARV.value      = inp.desiredARV     ?? "";
+      els.comments.value        = s.scenario_description ?? "";
+      els.interestOnlyToggle.checked = !!inp.interestOnly;
+
+      // taxesAnnual stored annually in DB — display monthly
+      els.taxesMonthly.value     = inp.taxesAnnual != null ? round2(inp.taxesAnnual / 12) : "";
+      els.insuranceMonthly.value = inp.insuranceMonthly ?? "";
+      els.hoaMonthly.value       = inp.hoaMonthly       ?? "";
+
+      els.viewModeToggle.checked      = false;
       document.body.dataset.carryMode = "monthly";
-      els.viewModeLabel.textContent = "Monthly view";
+      els.viewModeLabel.textContent   = "Monthly view";
       setCarryCostLabels("monthly");
 
+      els.addOrSaveBtn.textContent = "Save Changes";
       lastSavedSnapshot = JSON.stringify(collectForm());
+      els.addOrSaveBtn.disabled = true;
       triggerCompute();
     } else {
-      isEditMode = false;
-      editId = null;
       hardResetForm();
     }
+  } else {
+    hardResetForm();
   }
 
   // ===== View mode (Monthly/Annual) — robust handler =====
@@ -149,9 +154,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     setCarryCostLabels("monthly");
 
     isDirty = false;
-    lastSavedSnapshot = JSON.stringify(collectForm());
+    lastSavedSnapshot = null;
+    currentScenarioId = null;
 
     els.addOrSaveBtn.textContent = "Add Property to Catalogue";
+    els.addOrSaveBtn.disabled    = false;
     delete els.addOrSaveBtn.dataset.dupId;
 
     triggerCompute();
@@ -174,7 +181,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!el) return;
       el.addEventListener(evt, () => {
         isDirty = true;
-        checkDuplicateAddressUI(els.address.value, els.addOrSaveBtn, isEditMode);
         triggerCompute();
         historyGuard.tryInstallOrUninstall();
       });
@@ -275,6 +281,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderNetIncome(r);
     renderSuggestedARV(r);
     renderSupplemental(r);
+    if (lastSavedSnapshot !== null) {
+      els.addOrSaveBtn.disabled = (JSON.stringify(collectForm()) === lastSavedSnapshot);
+    }
   }
 
   function renderKPIs(r) {
@@ -325,14 +334,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     ).join("");
   }
 
-  // Add / Save with duplicate protection
-  els.addOrSaveBtn.addEventListener("click", () => {
-    if (!isEditMode && els.addOrSaveBtn.dataset.dupId) {
-      const id = els.addOrSaveBtn.dataset.dupId;
-      location.href = `FRAT.html?edit=${id}`;
-      return;
-    }
-
+  // Save to Supabase
+  els.addOrSaveBtn.addEventListener("click", async () => {
     const n = collectNums();
     const minimalOk = (+n.propertyValue > 0 && +n.percentDownPct >= 0 && +n.rateAprPct >= 0);
     if (!minimalOk) {
@@ -341,64 +344,65 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const r = computeFRAT(n);
-    const core = {
-      module: "FRAT",
-      source: { address: els.address.value || "", link: els.link.value || "", entryMode: "manual" },
+    const scenarioData = {
+      module: 'FRAT',
+      scenario_name: 'Base Case',
+      scenario_description: els.comments.value || null,
+      bedrooms_or_units: 0,
+      calculate_per_bedroom: false,
+      bedroom_details: null,
       inputs: {
-        propertyValue: +n.propertyValue,
-        percentDownPct: +n.percentDownPct,
-        rateAprPct: +n.rateAprPct,
-        loanLengthYears: +n.loanLengthYears,
-        estFixingCost: +n.estFixingCost,
-        taxesMonthly: +n.taxesMonthly,
+        propertyValue:    +n.propertyValue,
+        percentDownPct:   +n.percentDownPct,
+        rateAprPct:       +n.rateAprPct,
+        loanLengthYears:  +n.loanLengthYears,
+        estFixingCost:    +n.estFixingCost,
+        taxesAnnual:      round2(+n.taxesMonthly * 12),
         insuranceMonthly: +n.insuranceMonthly,
-        hoaMonthly: +n.hoaMonthly,
-        monthsHold: +n.monthsHold,
-        desiredARV: +n.desiredARV,
-        interestOnly: !!n.interestOnly,
-        comments: els.comments.value || "",
-        closingCosts: CONSTANTS.CLOSING_COSTS,
-        miscRateAnnual: CONSTANTS.MISC_RATE_ANNUAL
+        hoaMonthly:       +n.hoaMonthly,
+        monthsHold:       +n.monthsHold,
+        desiredARV:       +n.desiredARV,
+        interestOnly:     !!n.interestOnly,
       },
       computed: {
-        ownershipCostMonthly: round2(r.supp.ownershipCostMonthly),
-        operatingExpensesMonthly: round2(r.supp.operatingExpensesMonthly),
-        mortgageMonthly: round2(r.supp.mortgageMonthly),
-        netIncome: round2(r.netIncome),
-        roi: r.roi,
+        ownershipCostMonthly:      round2(r.supp.ownershipCostMonthly),
+        operatingExpensesMonthly:  round2(r.supp.operatingExpensesMonthly),
+        mortgageMonthly:           round2(r.supp.mortgageMonthly),
+        netIncome:                 round2(r.netIncome),
+        roi:                       r.roi,
         suggestedARV: {
           roi40: r.targets.arv40,
           roi30: r.targets.arv30,
           roi20: r.targets.arv20,
-          roi10: r.targets.arv10
-        }
+          roi10: r.targets.arv10,
+        },
       },
-      bands: { roi: bandROI(r.roi).label }
+      bands: { roi: bandROI(r.roi).label },
     };
 
-    if (isEditMode) {
-      const snap = JSON.stringify(collectForm());
-      if (lastSavedSnapshot === snap) {
-        showToast("No Changes Made", "info");
-        return;
-      }
-      updatePropertyInCatalog(editId, (prev) => ({ ...prev, ...core, updatedAt: new Date().toISOString() }));
-      showToast("Changes saved.", "success");
-      lastSavedSnapshot = snap;
-      isDirty = false;
-      // Navigate to catalogue and show updated property at top
-      window.location.href = "Catalogue.html";
-      return;
-    } else {
-      const newId = (crypto.randomUUID ? crypto.randomUUID() : (String(Date.now()) + Math.random().toString(16).slice(2)));
-      const prop = { id: newId, createdAt: new Date().toISOString(), pinned: false, ...core };
-      savePropertyToCatalog(prop);
-      showToast("Property added. Opening for edit.", "success");
-      location.href = `FRAT.html?edit=${newId}`;
-      return;
-    }
+    els.addOrSaveBtn.disabled = true;
+    els.addOrSaveBtn.textContent = "Saving…";
 
-    checkDuplicateAddressUI(els.address.value, els.addOrSaveBtn, isEditMode);
+    try {
+      if (currentScenarioId) {
+        await updateScenario(currentScenarioId, scenarioData);
+        showToast("Changes saved.", "success");
+        lastSavedSnapshot = JSON.stringify(collectForm());
+        isDirty = false;
+        window.location.href = "Catalogue.html";
+      } else {
+        const address = els.address.value.trim();
+        const link    = els.link.value.trim() || null;
+        const newProp = await createProperty(address, link);
+        await createScenario(newProp.id, scenarioData);
+        showToast("Property added.", "success");
+        window.location.href = `FRAT.html?propertyId=${newProp.id}`;
+      }
+    } catch (err) {
+      showToast("Save failed: " + err.message, "error");
+      els.addOrSaveBtn.disabled = false;
+      els.addOrSaveBtn.textContent = currentScenarioId ? "Save Changes" : "Add Property to Catalogue";
+    }
   });
 
   // Clear

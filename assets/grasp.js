@@ -16,6 +16,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   mainContent.classList.add("visible");
 
   document.getElementById("logoutBtn").addEventListener("click", patSignOut);
+  initProfileWidget(user, member);
 
   // ── URL params ────────────────────────────────────────────────────────────────
   const params     = new URLSearchParams(location.search);
@@ -170,10 +171,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ── Scenario selector (when propertyId is in URL) ────────────────────────────
   let allScenarios = [];
+  let currentProperty = null;
+  let lastSavedSnapshot = null;
 
   if (propertyId) {
     els.scenarioBar.style.display = "flex";
-    allScenarios = await fetchScenarios(propertyId);
+    [allScenarios, currentProperty] = await Promise.all([
+      fetchScenarios(propertyId),
+      fetchProperty(propertyId),
+    ]);
 
     renderScenarioSelect(allScenarios);
 
@@ -181,8 +187,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Load the most recent scenario
       loadScenarioIntoForm(allScenarios[0]);
     } else {
-      // New blank scenario
-      clearFormForNew();
+      // New scenario: pre-populate property address/link (taxes blank since no prior scenario)
+      clearFormForNew({
+        address: currentProperty?.address    ?? "",
+        link:    currentProperty?.zillow_link ?? "",
+      });
     }
 
     els.scenarioSelect.addEventListener("change", () => {
@@ -194,7 +203,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.newScenarioBtn.addEventListener("click", () => {
       currentScenarioId = null;
       els.scenarioSelect.value = "";
-      clearFormForNew();
+      const lastTaxesAnnual = allScenarios[0]?.inputs?.taxesAnnual ?? null;
+      clearFormForNew({
+        address:      currentProperty?.address   ?? "",
+        link:         currentProperty?.zillow_link ?? "",
+        taxesAnnual:  lastTaxesAnnual,
+      });
       els.scenarioActionsBar.style.display = "none";
       els.archivedBadge.style.display = "none";
     });
@@ -342,11 +356,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         history.replaceState({}, "", newUrl.toString());
         els.scenarioBar.style.display = "flex";
       }
+      lastSavedSnapshot = JSON.stringify(collectFormNormalized());
     } catch (err) {
       showSaveError(err.message || "Failed to save scenario.");
     }
 
-    els.addOrSaveBtn.disabled = false;
+    els.addOrSaveBtn.disabled = (lastSavedSnapshot !== null && JSON.stringify(collectFormNormalized()) === lastSavedSnapshot);
     els.addOrSaveBtn.textContent = "Save Scenario";
   });
 
@@ -361,12 +376,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ── Form helpers ──────────────────────────────────────────────────────────────
 
-  function clearFormForNew() {
+  function clearFormForNew(defaults = {}) {
     currentScenarioId = null;
+    lastSavedSnapshot = null;
     els.scenarioName.value        = "";
     els.scenarioDescription.value = "";
-    els.address.value             = "";
-    els.link.value                = "";
+    els.address.value             = defaults.address ?? "";
+    els.link.value                = defaults.link    ?? "";
     els.propertyValue.value       = "";
     els.percentDownPct.value      = "";
     els.rateAprPct.value          = "";
@@ -374,8 +390,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.estImprovementCost.value  = "";
     els.closingCosts.value        = "15000";
     els.miscRateAnnual.value      = "1";
-    // Tax field: set to empty; keep in current view mode
-    els.taxesMonthly.value        = "";
+    // Taxes: carry from previous scenario if provided, converted to display mode
+    if (defaults.taxesAnnual != null) {
+      const mode = getCarryMode();
+      els.taxesMonthly.value = mode === "annual" ? defaults.taxesAnnual : round2(defaults.taxesAnnual / 12);
+    } else {
+      els.taxesMonthly.value = "";
+    }
     els.insuranceMonthly.value    = "";
     els.hoaMonthly.value          = "";
     els.units.value               = "";
@@ -400,8 +421,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     els.scenarioName.value        = scenario.scenario_name || "";
     els.scenarioDescription.value = scenario.scenario_description || "";
-    els.address.value             = "";  // address lives on property, not shown here yet
-    els.link.value                = "";
+    els.address.value             = currentProperty?.address    ?? "";
+    els.link.value                = currentProperty?.zillow_link ?? "";
     els.propertyValue.value       = inp.propertyValue ?? "";
     els.percentDownPct.value      = inp.percentDownPct ?? "";
     els.rateAprPct.value          = inp.rateAprPct ?? "";
@@ -457,6 +478,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     hideSaveError();
     triggerCompute();
+    lastSavedSnapshot = JSON.stringify(collectFormNormalized());
+    els.addOrSaveBtn.disabled = true;
   }
 
   function renderScenarioSelect(scenarios) {
@@ -467,8 +490,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (scenarios.length === 0) {
       opts.push('<option value="">No scenarios — create one below</option>');
     }
-    // Add blank "new" option at end
-    opts.push('<option value="">+ New scenario</option>');
     els.scenarioSelect.innerHTML = opts.join("");
     if (scenarios.length > 0) els.scenarioSelect.value = scenarios[0].id;
     else els.scenarioSelect.value = "";
@@ -568,6 +589,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderDSCRGuide(kpi);
     renderSuggestedRent(kpi);
     renderSupplemental(kpi, f);
+    if (lastSavedSnapshot !== null) {
+      els.addOrSaveBtn.disabled = (JSON.stringify(f) === lastSavedSnapshot);
+    }
   }
 
   function renderKPIs(k) {
@@ -595,8 +619,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   function renderSuggestedRent(k) {
     const s = k.computed.suggestedRentPerUnit;
     const cell = (v) => isFinite(v) ? formatMoney(v) : "N/A";
-    const [coc1, coc2, coc3] = CONSTANTS.COC_BANDS.map(v => (v * 100) + "%");
-    const [cap1, cap2, cap3] = CONSTANTS.CAP_RATE_BANDS.map(v => (v * 100) + "%");
+    const [coc1, coc2, coc3] = CONSTANTS.COC_BANDS.map(v => (v * 100).toFixed(0) + "%");
+    const [cap1, cap2, cap3] = CONSTANTS.CAP_RATE_BANDS.map(v => (v * 100).toFixed(0) + "%");
     els.suggestedRentCoc.innerHTML = `
       <tr><td>CoC ${coc1}</td><td>${cell(s.coc.pct7)}</td></tr>
       <tr><td>CoC ${coc2}</td><td>${cell(s.coc.pct5)}</td></tr>

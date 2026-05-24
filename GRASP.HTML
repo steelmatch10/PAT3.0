@@ -128,7 +128,9 @@
         <div class="logo"></div>
         <h1>GRASP <span class="small">Gauging Rental Asset Strength &amp; Potential</span></h1>
       </div>
-      <nav class="nav">
+      <nav class="nav" style="display:flex;align-items:center;gap:12px;">
+        <span id="userEmail" style="font-size:13px;color:var(--muted);"></span>
+        <span id="roleBadge" class="role-badge"></span>
         <a class="btn" href="index.html" id="homeBtn">Properties</a>
         <a class="btn" href="Catalogue.html">Catalogue</a>
         <button class="btn" id="logoutBtn">Sign out</button>
@@ -139,7 +141,7 @@
     <div class="scenario-bar" id="scenarioBar" style="display:none;">
       <span style="font-size:13px;color:var(--muted);white-space:nowrap;">Scenario:</span>
       <select id="scenarioSelect"></select>
-      <button class="btn" id="newScenarioBtn">+ New</button>
+      <button class="btn" id="newScenarioBtn">+ New Scenario</button>
       <div class="scenario-actions" id="scenarioActionsBar" style="display:none;">
         <button class="btn btn-danger" id="archiveScenarioBtn">Archive</button>
       </div>
