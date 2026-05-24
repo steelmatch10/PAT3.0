@@ -19,12 +19,20 @@ const path = require('path');
 const { parse } = require('csv-parse/sync');
 const { createClient } = require('@supabase/supabase-js');
 
+// Load .env from project root (no dotenv dependency needed)
+const envPath = path.join(__dirname, '..', '.env');
+if (fs.existsSync(envPath)) {
+  fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+    const m = line.match(/^\s*([^#=][^=]*)=(.*)$/);
+    if (m && !process.env[m[1].trim()]) process.env[m[1].trim()] = m[2].trim();
+  });
+}
+
 // ── CONFIG ─────────────────────────────────────────────────────────────────────
-// Fill these in before running, or set as env vars.
 const CONFIG = {
-  SUPABASE_URL:         process.env.SUPABASE_URL         || 'https://YOUR_PROJECT.supabase.co',
+  SUPABASE_URL:         process.env.SUPABASE_URL         || (process.env.SUPABASE_PROJECT_ID ? `https://${process.env.SUPABASE_PROJECT_ID}.supabase.co` : 'https://YOUR_PROJECT.supabase.co'),
   SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SECRET_SERVICE_ROLE || 'YOUR_SERVICE_ROLE_KEY',
-  FOUNDER_USER_ID:      process.env.FOUNDER_USER_ID      || 'YOUR_FOUNDER_UUID',  // dmalde1998@gmail.com
+  FOUNDER_USER_ID:      process.env.FOUNDER_USER_ID      || 'YOUR_FOUNDER_UUID',
   CSV_PATH: path.join(__dirname, 'Property Analysis Tools (PAT) - (Gauging Rental Asset Strength & Potential) GRASP.csv'),
   DRY_RUN: process.env.DRY_RUN === 'true',  // set DRY_RUN=true to preview without writing
 };
