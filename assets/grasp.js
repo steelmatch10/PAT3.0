@@ -611,8 +611,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   function renderSuggestedRent(k) {
     const s = k.computed.suggestedRentPerUnit;
     const cell = (v) => isFinite(v) ? formatMoney(v) : "N/A";
-    const [coc1, coc2, coc3] = CONSTANTS.COC_BANDS.map(v => (v * 100) + "%");
-    const [cap1, cap2, cap3] = CONSTANTS.CAP_RATE_BANDS.map(v => (v * 100) + "%");
+    const [coc1, coc2, coc3] = CONSTANTS.COC_BANDS.map(v => (v * 100).toFixed(0) + "%");
+    const [cap1, cap2, cap3] = CONSTANTS.CAP_RATE_BANDS.map(v => (v * 100).toFixed(0) + "%");
     els.suggestedRentCoc.innerHTML = `
       <tr><td>CoC ${coc1}</td><td>${cell(s.coc.pct7)}</td></tr>
       <tr><td>CoC ${coc2}</td><td>${cell(s.coc.pct5)}</td></tr>
