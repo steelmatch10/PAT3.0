@@ -171,10 +171,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ── Scenario selector (when propertyId is in URL) ────────────────────────────
   let allScenarios = [];
+  let currentProperty = null;
 
   if (propertyId) {
     els.scenarioBar.style.display = "flex";
-    allScenarios = await fetchScenarios(propertyId);
+    [allScenarios, currentProperty] = await Promise.all([
+      fetchScenarios(propertyId),
+      fetchProperty(propertyId),
+    ]);
 
     renderScenarioSelect(allScenarios);
 
@@ -182,8 +186,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Load the most recent scenario
       loadScenarioIntoForm(allScenarios[0]);
     } else {
-      // New blank scenario
-      clearFormForNew();
+      // New scenario: pre-populate property address/link (taxes blank since no prior scenario)
+      clearFormForNew({
+        address: currentProperty?.address    ?? "",
+        link:    currentProperty?.zillow_link ?? "",
+      });
     }
 
     els.scenarioSelect.addEventListener("change", () => {
@@ -195,7 +202,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.newScenarioBtn.addEventListener("click", () => {
       currentScenarioId = null;
       els.scenarioSelect.value = "";
-      clearFormForNew();
+      const lastTaxesAnnual = allScenarios[0]?.inputs?.taxesAnnual ?? null;
+      clearFormForNew({
+        address:      currentProperty?.address   ?? "",
+        link:         currentProperty?.zillow_link ?? "",
+        taxesAnnual:  lastTaxesAnnual,
+      });
       els.scenarioActionsBar.style.display = "none";
       els.archivedBadge.style.display = "none";
     });
@@ -362,12 +374,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ── Form helpers ──────────────────────────────────────────────────────────────
 
-  function clearFormForNew() {
+  function clearFormForNew(defaults = {}) {
     currentScenarioId = null;
     els.scenarioName.value        = "";
     els.scenarioDescription.value = "";
-    els.address.value             = "";
-    els.link.value                = "";
+    els.address.value             = defaults.address ?? "";
+    els.link.value                = defaults.link    ?? "";
     els.propertyValue.value       = "";
     els.percentDownPct.value      = "";
     els.rateAprPct.value          = "";
@@ -375,8 +387,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.estImprovementCost.value  = "";
     els.closingCosts.value        = "15000";
     els.miscRateAnnual.value      = "1";
-    // Tax field: set to empty; keep in current view mode
-    els.taxesMonthly.value        = "";
+    // Taxes: carry from previous scenario if provided, converted to display mode
+    if (defaults.taxesAnnual != null) {
+      const mode = getCarryMode();
+      els.taxesMonthly.value = mode === "annual" ? defaults.taxesAnnual : round2(defaults.taxesAnnual / 12);
+    } else {
+      els.taxesMonthly.value = "";
+    }
     els.insuranceMonthly.value    = "";
     els.hoaMonthly.value          = "";
     els.units.value               = "";
