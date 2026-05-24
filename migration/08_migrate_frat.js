@@ -22,9 +22,18 @@ const path = require('path');
 const { parse } = require('csv-parse/sync');
 const { createClient } = require('@supabase/supabase-js');
 
+// Load .env from project root (no dotenv dependency needed)
+const envPath = path.join(__dirname, '..', '.env');
+if (fs.existsSync(envPath)) {
+  fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+    const m = line.match(/^\s*([^#=][^=]*)=(.*)$/);
+    if (m && !process.env[m[1].trim()]) process.env[m[1].trim()] = m[2].trim();
+  });
+}
+
 // ── CONFIG ─────────────────────────────────────────────────────────────────────
 const CONFIG = {
-  SUPABASE_URL:         process.env.SUPABASE_URL         || 'https://YOUR_PROJECT.supabase.co',
+  SUPABASE_URL:         process.env.SUPABASE_URL         || (process.env.SUPABASE_PROJECT_ID ? `https://${process.env.SUPABASE_PROJECT_ID}.supabase.co` : 'https://YOUR_PROJECT.supabase.co'),
   SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SECRET_SERVICE_ROLE || 'YOUR_SERVICE_ROLE_KEY',
   FOUNDER_USER_ID:      process.env.FOUNDER_USER_ID      || 'YOUR_FOUNDER_UUID',
   CSV_PATH: path.join(__dirname, 'Property Analysis Tools (PAT) - NJ FRAT 1.0.csv'),
@@ -104,9 +113,10 @@ function computeAll(input) {
   const desiredARV        = toNum(input.desiredARV);
 
   // Step 1
+  // totalPurchaseCap = upfront cash only (down + closing); fixing cost is financed into loan
   const moneyDown        = acquisitionValue * percentDown;
   const closingCosts     = acquisitionValue * CONSTANTS.CLOSING_COSTS_PERCENT;
-  const totalPurchaseCap = moneyDown + closingCosts + estFixingCost;
+  const totalPurchaseCap = moneyDown + closingCosts;
   const loanAmount       = acquisitionValue + estFixingCost - moneyDown;
 
   // Step 2 — PMT
@@ -180,13 +190,13 @@ function runValidation() {
   const checks = [
     ['Money Down',         c.moneyDown,        55000,    50],
     ['Closing Costs',      c.closingCosts,     13750,    50],
-    ['Total Purchase Cap', c.totalPurchaseCap, 168750,   50],
+    ['Total Purchase Cap', c.totalPurchaseCap, 68750,    50],
     ['Loan Amount',        c.loanAmount,       320000,   50],
     ['Mortgage Monthly',   c.mortgageMonthly,  2348.05,  1],   // PMT(8%/12, 360, 320000) = 2348.05; PAT 2.0 doc shows 2345.22 (minor transcription diff)
     ['Recurring Monthly',  c.recurringMonthly, 2783,     5],
-    ['Hold Costs (5mo)',   c.holdCosts,        13916,    50],
-    ['Total Investment',   c.totalInvestment,  182666,   100],
-    ['Net Profit',         c.netProfit,        -2666,    100],
+    ['Hold Costs (5mo)',   c.holdCosts,        13933,    50],
+    ['Total Investment',   c.totalInvestment,  82683,    100],
+    ['Net Profit',         c.netProfit,        97317,    100],
   ];
 
   let passed = 0;
@@ -233,14 +243,6 @@ async function main() {
 
   // Keep raw headers (some have trailing spaces in the CSV) and match with trim in col()
   const headers = rows[0];
-  // Skip blank rows: must have an address AND a non-zero acquisition value
-  const dataRows = rows.slice(1).filter(r => {
-    const addr = (r[0] || '').trim();
-    const acq  = parseCurrency(r[1] || '');
-    return addr !== '' && acq > 0;
-  });
-
-  console.log(`CSV: ${dataRows.length} data rows after filtering blanks\n`);
 
   const col = (name) => {
     const i = headers.findIndex(h => h.trim() === name.trim());
@@ -261,6 +263,15 @@ async function main() {
     monthsHold:    col('Months Till Resale'),
     desiredARV:    col('Desired Resale Value'),
   };
+
+  // Skip blank/template rows: must have an address AND a non-zero acquisition value
+  const dataRows = rows.slice(1).filter(r => {
+    const addr = (r[CI.address] || '').trim();
+    const acq  = parseCurrency(r[CI.propertyValue] || '');
+    return addr !== '' && acq > 0;
+  });
+
+  console.log(`CSV: ${dataRows.length} data rows after filtering blanks\n`);
 
   const propertyMap = new Map();  // address → propertyId
   let propertyInsertCount = 0;
