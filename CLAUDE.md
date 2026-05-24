@@ -79,6 +79,14 @@ LocalStorage key: `pat-1.0.0`
 }
 ```
 
+## Formula Reference
+- **`migration/Formulas.md`** — authoritative PAT 2.0 formula spec for both GRASP and FRAT. Read this before touching any calculation in `app.js` or `frat.js`.
+- Key non-obvious facts:
+  - GRASP NOI **and cash flow** both use **90% of gross rent** (10% vacancy factor applies to all income metrics)
+  - GRASP DSCR = **(NOI × 0.80)** / (mortgage × 12) — conservative 80% lending standard
+  - FRAT totalPurchaseCap = down + closing only (flipping cost is **financed into the loan**, not upfront cash)
+  - Misc cost is read per-scenario from the CSV; `CONSTANTS.MISC_RATE_ANNUAL` is only a fallback default
+
 ## Key Patterns
 - **Shared utilities** live in `assets/app.js`: LocalStorage read/write, address normalization, duplicate detection, currency/percentage formatting, toast notifications, modal confirmations.
 - **Module logic** (`grasp.js`, `frat.js`) handles form state, calculation, KPI banding, and saving to the catalogue.

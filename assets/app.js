@@ -269,13 +269,16 @@ function computeAll(input) {
   const operatingExpensesMonthly = taxesMonthly + insuranceMonthly + hoaMonthly + miscMonthly;
   const ownershipCostMonthly = operatingExpensesMonthly + mortgageMonthly;
 
-  const noiAnnual = (grossRentMonthly - operatingExpensesMonthly) * 12;
-  const annualCashFlow = (grossRentMonthly - ownershipCostMonthly) * 12;
+  // 10% vacancy factor applied to gross rent (mirrors PAT 2.0 workbook)
+  const effectiveRentMonthly = grossRentMonthly * 0.90;
+  const noiAnnual = (effectiveRentMonthly - operatingExpensesMonthly) * 12;
+  const annualCashFlow = (effectiveRentMonthly - ownershipCostMonthly) * 12;
   const totalInitialInvestment = downPayment + estImprovementCost + closingCosts;
 
   const capRate = (propertyValue > 0) ? (noiAnnual / propertyValue) : NaN;
   const cashOnCash = (totalInitialInvestment > 0) ? (annualCashFlow / totalInitialInvestment) : NaN;
-  const dscr = (mortgageMonthly > 0) ? (noiAnnual / (mortgageMonthly * 12)) : NaN;
+  // DSCR uses 80% of NOI — conservative lending standard (PAT 2.0: NOI_80% column)
+  const dscr = (mortgageMonthly > 0) ? ((noiAnnual * 0.80) / (mortgageMonthly * 12)) : NaN;
 
   // DSCR target price using 85% of NOI
   function priceForDSCR(target) {
