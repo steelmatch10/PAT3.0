@@ -69,6 +69,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     archivedBadge:       document.getElementById("archivedBadge"),
   };
 
+  // Income Efficiency elements — declared here to avoid temporal dead zone errors
+  const ieInput = document.getElementById("incomeEfficiency");
+  const ieLabel = document.getElementById("ieLabel");
+
   // ── Access check — investor read-only enforcement ────────────────────────────
   let readOnly = false;
   if (!founder && propertyId) {
@@ -183,6 +187,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderScenarioSelect(allScenarios);
 
+    // Load per-property Income Efficiency from Supabase (already in currentProperty)
+    if (ieInput) {
+      const ieVal = String(currentProperty?.income_efficiency ?? 80);
+      ieInput.value = ieVal;
+      if (ieLabel) ieLabel.textContent = ieVal;
+    }
+
     if (allScenarios.length > 0 && !newScenario) {
       // Load the most recent scenario
       loadScenarioIntoForm(allScenarios[0]);
@@ -249,6 +260,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     "scenarioName", "scenarioDescription", "address", "link", "propertyValue", "percentDownPct",
     "rateAprPct", "loanLengthYears", "estImprovementCost", "closingCosts", "miscRateAnnual",
     "taxesMonthly", "insuranceMonthly", "hoaMonthly", "units", "rentPerUnitMonthly",
+    "incomeEfficiency",
   ];
   allInputIds.forEach(id => {
     const el = document.getElementById(id);
@@ -256,6 +268,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     el.addEventListener("input", () => triggerCompute());
     el.addEventListener("change", () => triggerCompute());
   });
+
+  // Auto-calculate closing costs (2.5% of property value) when flag is set
+  // Note: runs after the allInputIds listener, so triggerCompute() already fired once;
+  // we update the value then call it again so the new closingCosts is reflected.
+  els.propertyValue.addEventListener("input", () => {
+    if (els.closingCosts.dataset.autoCalc !== "false") {
+      const pv = parseFloat(els.propertyValue.value) || 0;
+      els.closingCosts.value = pv > 0 ? Math.round(pv * 0.025) : "";
+      triggerCompute();
+    }
+  });
+
+  // User manually editing closing costs clears the auto-calc flag
+  els.closingCosts.addEventListener("input", () => {
+    els.closingCosts.dataset.autoCalc = "false";
+  });
+
+  // Keep IE label in sync and persist per-property
+  if (ieInput && ieLabel) {
+    ieInput.addEventListener("input", () => {
+      const val = ieInput.value || "80";
+      ieLabel.textContent = val;
+      if (currentPropertyId) updatePropertyIncomeEfficiency(currentPropertyId, parseInt(val, 10) || 80);
+    });
+  }
 
   // ── Save button ───────────────────────────────────────────────────────────────
   els.addOrSaveBtn.addEventListener("click", async () => {
@@ -278,29 +315,34 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Build inputs JSONB
     const inputs = {
-      propertyValue:     normalized.propertyValue,
-      percentDownPct:    normalized.percentDownPct,
-      rateAprPct:        normalized.rateAprPct,
-      loanLengthYears:   normalized.loanLengthYears,
-      taxesAnnual:       normalized.taxesAnnual,
-      insuranceMonthly:  normalized.insuranceMonthly,
-      hoaMonthly:        normalized.hoaMonthly,
-      estImprovementCost: normalized.estImprovementCost,
-      closingCosts:      normalized.closingCosts,
-      miscRateAnnual:    normalized.miscRateAnnual,
+      propertyValue:               normalized.propertyValue,
+      percentDownPct:              normalized.percentDownPct,
+      rateAprPct:                  normalized.rateAprPct,
+      loanLengthYears:             normalized.loanLengthYears,
+      taxesAnnual:                 normalized.taxesAnnual,
+      insuranceMonthly:            normalized.insuranceMonthly,
+      hoaMonthly:                  normalized.hoaMonthly,
+      estImprovementCost:          normalized.estImprovementCost,
+      closingCosts:                normalized.closingCosts,
+      closingCostsIsAutoCalculated: normalized.closingCostsIsAutoCalculated,
+      miscRateAnnual:              normalized.miscRateAnnual,
+      rentPerUnitMonthly:          normalized.rentPerUnitMonthly,
     };
 
     // Compute KPIs (computeAll expects taxesMonthly)
     const kpiResult = computeAll({
-      propertyValue:     inputs.propertyValue,
-      percentDownPct:    inputs.percentDownPct,
-      rateAprPct:        inputs.rateAprPct,
-      loanLengthYears:   inputs.loanLengthYears,
-      taxesMonthly:      inputs.taxesAnnual / 12,
-      insuranceMonthly:  inputs.insuranceMonthly,
-      hoaMonthly:        inputs.hoaMonthly,
+      propertyValue:      inputs.propertyValue,
+      percentDownPct:     inputs.percentDownPct,
+      rateAprPct:         inputs.rateAprPct,
+      loanLengthYears:    inputs.loanLengthYears,
+      taxesMonthly:       inputs.taxesAnnual / 12,
+      insuranceMonthly:   inputs.insuranceMonthly,
+      hoaMonthly:         inputs.hoaMonthly,
       estImprovementCost: inputs.estImprovementCost,
-      bedroomsOrUnits:   normalized.bedroomsOrUnits,
+      closingCosts:       inputs.closingCosts,
+      miscRateAnnual:     inputs.miscRateAnnual,
+      incomeEfficiencyPct: normalized.incomeEfficiencyPct,
+      bedroomsOrUnits:    normalized.bedroomsOrUnits,
       rentPerUnitMonthly: normalized.rentPerUnitMonthly,
     });
 
@@ -388,7 +430,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.rateAprPct.value          = "";
     els.loanLengthYears.value     = "30";
     els.estImprovementCost.value  = "";
-    els.closingCosts.value        = "15000";
+    els.closingCosts.value        = "";
+    els.closingCosts.dataset.autoCalc = "true";
     els.miscRateAnnual.value      = "1";
     // Taxes: carry from previous scenario if provided, converted to display mode
     if (defaults.taxesAnnual != null) {
@@ -428,7 +471,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.rateAprPct.value          = inp.rateAprPct ?? "";
     els.loanLengthYears.value     = inp.loanLengthYears ?? 30;
     els.estImprovementCost.value  = inp.estImprovementCost ?? "";
-    els.closingCosts.value        = inp.closingCosts ?? 15000;
+    els.closingCosts.value        = inp.closingCosts ?? "";
+    els.closingCosts.dataset.autoCalc = inp.closingCostsIsAutoCalculated !== false ? "true" : "false";
     els.miscRateAnnual.value      = inp.miscRateAnnual != null ? (inp.miscRateAnnual * 100).toFixed(2) : "1";
 
     // Taxes: stored as taxesAnnual; display in current mode
@@ -457,11 +501,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
       els.perBedroomSection.classList.remove("visible");
       els.avgRentGroup.style.display = "";
-      // Gross rent is stored in computed; reverse-engineer rentPerUnit
-      const computed = scenario.computed || {};
-      const grossRent = computed.grossRentMonthly || 0;
-      const beds = scenario.bedrooms_or_units || 1;
-      els.rentPerUnitMonthly.value = beds > 0 ? round2(grossRent / beds) : "";
+      // Prefer stored input value; fall back to reverse-engineering from computed for legacy scenarios
+      const storedRent = inp.rentPerUnitMonthly;
+      if (storedRent != null) {
+        els.rentPerUnitMonthly.value = storedRent;
+      } else {
+        const grossRent = (scenario.computed || {}).grossRentMonthly || 0;
+        const beds = scenario.bedrooms_or_units || 1;
+        els.rentPerUnitMonthly.value = beds > 0 ? round2(grossRent / beds) : "";
+      }
     }
 
     // Archive state
@@ -558,7 +606,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       rateAprPct:          parseFloat(els.rateAprPct.value) || 0,
       loanLengthYears:     parseFloat(els.loanLengthYears.value) || 30,
       estImprovementCost:  parseFloat(els.estImprovementCost.value) || 0,
-      closingCosts:        parseFloat(els.closingCosts.value) || 15000,
+      closingCosts:                parseFloat(els.closingCosts.value) || 0,
+      closingCostsIsAutoCalculated: els.closingCosts.dataset.autoCalc !== "false",
+      incomeEfficiencyPct:         parseFloat(document.getElementById("incomeEfficiency")?.value) || 80,
       miscRateAnnual:      miscRateDecimal,
       taxesAnnual,
       insuranceMonthly,
@@ -573,15 +623,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   function triggerCompute() {
     const f = collectFormNormalized();
     const kpi = computeAll({
-      propertyValue:     f.propertyValue,
-      percentDownPct:    f.percentDownPct,
-      rateAprPct:        f.rateAprPct,
-      loanLengthYears:   f.loanLengthYears,
-      taxesMonthly:      f.taxesAnnual / 12,
-      insuranceMonthly:  f.insuranceMonthly,
-      hoaMonthly:        f.hoaMonthly,
+      propertyValue:      f.propertyValue,
+      percentDownPct:     f.percentDownPct,
+      rateAprPct:         f.rateAprPct,
+      loanLengthYears:    f.loanLengthYears,
+      taxesMonthly:       f.taxesAnnual / 12,
+      insuranceMonthly:   f.insuranceMonthly,
+      hoaMonthly:         f.hoaMonthly,
       estImprovementCost: f.estImprovementCost,
-      bedroomsOrUnits:   f.bedroomsOrUnits,
+      closingCosts:       f.closingCosts,
+      incomeEfficiencyPct: f.incomeEfficiencyPct,
+      bedroomsOrUnits:    f.bedroomsOrUnits,
       rentPerUnitMonthly: f.rentPerUnitMonthly,
     });
 
@@ -594,6 +646,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  // Fields (input IDs) required for each KPI
+  const KPI_REQUIRED_FIELDS = {
+    coc:     ["propertyValue", "percentDownPct", "estImprovementCost", "closingCosts", "units", "rentPerUnitMonthly", "taxesMonthly", "insuranceMonthly", "hoaMonthly", "loanLengthYears", "rateAprPct"],
+    capRate: ["propertyValue", "units", "rentPerUnitMonthly", "taxesMonthly", "insuranceMonthly", "hoaMonthly"],
+    dscr:    ["propertyValue", "percentDownPct", "loanLengthYears", "rateAprPct", "units", "rentPerUnitMonthly", "taxesMonthly", "insuranceMonthly", "hoaMonthly"],
+  };
+
+  function setKpiHighlight(kpiKey, active) {
+    const fields = KPI_REQUIRED_FIELDS[kpiKey] || [];
+    fields.forEach(id => {
+      const el = document.getElementById(id);
+      const wrap = el?.closest(".input");
+      if (wrap) wrap.classList.toggle("highlight-required", active);
+    });
+  }
+
   function renderKPIs(k) {
     const cap  = k.computed.capRate;
     const coc  = k.computed.cashOnCash;
@@ -602,10 +670,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     const tipCoC  = "CoC = Annual Cash Flow / Total Initial Investment";
     const tipDSCR = "DSCR = NOI / Annual Debt Service (Mortgage × 12)";
     els.kpiBadges.innerHTML = `
-      <div class="${kpiClass(k.bands.cashOnCash)}" title="${tipCoC}">CoC <span class="value"> ${isFinite(coc) ? formatPct(coc) : "N/A"}</span></div>
-      <div class="${kpiClass(k.bands.capRate)}" title="${tipCap}">Cap Rate <span class="value"> ${isFinite(cap) ? formatPct(cap) : "N/A"}</span></div>
-      <div class="${kpiClass(k.bands.dscr)}" title="${tipDSCR}">DSCR <span class="value"> ${isFinite(dscr) ? dscr.toFixed(2) : "N/A"}</span></div>
+      <div class="${kpiClass(k.bands.cashOnCash)}" title="${tipCoC}" data-kpi="coc" style="cursor:default">CoC <span class="value"> ${isFinite(coc) ? formatPct(coc) : "N/A"}</span></div>
+      <div class="${kpiClass(k.bands.capRate)}" title="${tipCap}" data-kpi="capRate" style="cursor:default">Cap Rate <span class="value"> ${isFinite(cap) ? formatPct(cap) : "N/A"}</span></div>
+      <div class="${kpiClass(k.bands.dscr)}" title="${tipDSCR}" data-kpi="dscr" style="cursor:default">DSCR <span class="value"> ${isFinite(dscr) ? dscr.toFixed(2) : "N/A"}</span></div>
     `;
+
+    // Attach hover listeners to each pill
+    els.kpiBadges.querySelectorAll("[data-kpi]").forEach(pill => {
+      pill.addEventListener("mouseenter", () => setKpiHighlight(pill.dataset.kpi, true));
+      pill.addEventListener("mouseleave", () => setKpiHighlight(pill.dataset.kpi, false));
+    });
   }
 
   function renderDSCRGuide(k) {
@@ -639,7 +713,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const totalInitial = n.downPayment + n.closingCosts + (f.estImprovementCost || 0);
     const rows = [
       { label: "Down Payment",               val: formatMoney(n.downPayment),               tip: "Down = Property Value × Percent Down" },
-      { label: "Closing Costs",              val: formatMoney(n.closingCosts),              tip: `Closing = $${(f.closingCosts || 15000).toLocaleString()} (editable per scenario)` },
+      { label: "Closing Costs",              val: formatMoney(n.closingCosts),              tip: `Closing = $${(f.closingCosts || 0).toLocaleString()} (editable; defaults to 2.5% of property value)` },
       { label: "Estimated Improvement Cost", val: formatMoney(f.estImprovementCost || 0),  tip: "As entered" },
       { label: "Total Initial Investment",   val: formatMoney(totalInitial),                tip: "Down + Closing + Improvements" },
       { label: "Loan Amount",                val: formatMoney(n.loanAmount),               tip: "Loan = Property Value − Down Payment" },

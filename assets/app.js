@@ -4,7 +4,7 @@
 // Named Constants (single source of truth for all thresholds/targets)
 // -------------------------------
 const CONSTANTS = {
-  CLOSING_COSTS:    15000,          // flat worst-case closing cost estimate
+  CLOSING_COSTS:    0,              // fallback only; new scenarios default to 2.5% of property value
   MISC_RATE_ANNUAL: 0.01,           // 1% annual misc for operating expenses
   COC_BANDS:        [0.07, 0.05, 0.03],
   CAP_RATE_BANDS:   [0.12, 0.08, 0.05],
@@ -250,8 +250,9 @@ function computeAll(input) {
   const rentPerUnitMonthly = toNumber(input.rentPerUnitMonthly);
 
   const downPayment = propertyValue * percentDown;
-  const closingCosts = CONSTANTS.CLOSING_COSTS;
-  const miscMonthly = (propertyValue * CONSTANTS.MISC_RATE_ANNUAL) / 12;
+  const closingCosts = toNumber(input.closingCosts ?? CONSTANTS.CLOSING_COSTS);
+  const miscRate = toNumber(input.miscRateAnnual ?? CONSTANTS.MISC_RATE_ANNUAL);
+  const miscMonthly = (propertyValue * miscRate) / 12;
 
   const loanAmount = Math.max(0, propertyValue - downPayment);
   const r = rateApr / 12;
@@ -280,10 +281,12 @@ function computeAll(input) {
   // DSCR uses 80% of NOI — conservative lending standard (PAT 2.0: NOI_80% column)
   const dscr = (mortgageMonthly > 0) ? ((noiAnnual * 0.80) / (mortgageMonthly * 12)) : NaN;
 
-  // DSCR target price using 85% of NOI
+  const incomeEfficiency = (toNumber(input.incomeEfficiencyPct) || 80) / 100;
+
+  // DSCR target price using income efficiency % of NOI (default 80%)
   function priceForDSCR(target) {
     if (target <= 0) return NaN;
-    const ADS = (0.85 * noiAnnual) / target;   // Annual Debt Service target
+    const ADS = (incomeEfficiency * noiAnnual) / target;   // Annual Debt Service target
     const PMT = ADS / 12;                      // Monthly payment target
     let loanTarget = 0;
     if (r === 0) {
@@ -356,7 +359,7 @@ function openPrintableCatalogue(props) {
     const dscr = isFinite(p.computed?.dscr) ? p.computed.dscr.toFixed(2) : "N/A";
     // Calculate Total Initial Investment
     const downPayment = Number(p.inputs.propertyValue) * (Number(p.inputs.percentDownPct) / 100);
-    const closingCosts = CONSTANTS.CLOSING_COSTS;
+    const closingCosts = Number(p.inputs.closingCosts) || 0;
     const improvementCost = Number(p.inputs.estImprovementCost) || 0;
     const totalInitial = downPayment + closingCosts + improvementCost;
     const grossRentMonthly = isFinite(p.computed?.grossRentMonthly) ? formatMoney(p.computed.grossRentMonthly) : "N/A";

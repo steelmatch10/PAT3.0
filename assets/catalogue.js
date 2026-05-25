@@ -9,6 +9,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const founder = member?.global_role === 'founder';
   const investor = member?.global_role === 'investor';
 
+  // Recompute all GRASP scenarios in the background so stored values are fresh.
+  // Fire-and-forget — does not block page render or loadData().
+  recomputeAllScenarios().catch(err => console.warn('recomputeAllScenarios:', err));
+
   // For investors, fetch their approved property IDs so those float to the top
   let approvedIds = new Set();
   if (investor) {
@@ -470,18 +474,112 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ── Export (founders only) ─────────────────────────────────────────────────
   const exportBtn    = document.getElementById('exportBtn');
   const exportSelect = document.getElementById('exportSelect');
+
+  function getSelectedIds() {
+    return [...document.querySelectorAll('.cat-select:checked')].map(cb => cb.dataset.id);
+  }
+
+  function updateExportBtnLabel() {
+    if (!exportBtn) return;
+    const selectedIds = getSelectedIds();
+    exportBtn.textContent = selectedIds.length > 0 ? 'Export Selected' : 'Export All';
+  }
+
+  // Delegate checkbox change events on the cards/table containers
+  ['cards', 'tableView'].forEach(containerId => {
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.addEventListener('change', (e) => {
+        if (e.target.classList.contains('cat-select')) updateExportBtnLabel();
+      });
+    }
+  });
+
+  function generateCsv(props) {
+    const CSV_COLS = [
+      'address', 'scenario_name', 'scenario_description', 'module',
+      'propertyValue', 'percentDownPct', 'rateAprPct', 'loanLengthYears',
+      'estImprovementCost', 'closingCosts', 'bedroomsOrUnits', 'rentPerUnitMonthly',
+      'taxesMonthly', 'taxesAnnual', 'insuranceMonthly', 'hoaMonthly',
+      'coC', 'capRate', 'dscr',
+      'suggestedRentCoC7pct', 'suggestedRentCoC5pct', 'suggestedRentCoC3pct',
+      'suggestedRentCap12pct', 'suggestedRentCap8pct', 'suggestedRentCap5pct',
+    ];
+    const escCsv = (v) => {
+      if (v == null) return '';
+      const s = String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = [CSV_COLS.join(',')];
+    for (const p of props) {
+      const scenarios = p.scenarios || [];
+      if (scenarios.length === 0) {
+        rows.push(CSV_COLS.map(col => col === 'address' ? escCsv(p.address) : '').join(','));
+        continue;
+      }
+      for (const s of scenarios) {
+        const inp = s.inputs || {};
+        const comp = s.computed || {};
+        const sugRent = comp.suggestedGrossRent || comp.suggestedRentPerUnit || {};
+        const row = CSV_COLS.map(col => {
+          switch (col) {
+            case 'address':             return escCsv(p.address);
+            case 'scenario_name':       return escCsv(s.scenario_name);
+            case 'scenario_description': return escCsv(s.scenario_description);
+            case 'module':              return escCsv(s.module);
+            case 'propertyValue':       return escCsv(inp.propertyValue);
+            case 'percentDownPct':      return escCsv(inp.percentDownPct != null ? inp.percentDownPct / 100 : '');
+            case 'rateAprPct':          return escCsv(inp.rateAprPct != null ? inp.rateAprPct / 100 : '');
+            case 'loanLengthYears':     return escCsv(inp.loanLengthYears);
+            case 'estImprovementCost':  return escCsv(inp.estImprovementCost);
+            case 'closingCosts':        return escCsv(inp.closingCosts);
+            case 'bedroomsOrUnits':     return escCsv(s.bedrooms_or_units);
+            case 'rentPerUnitMonthly':  return escCsv(inp.rentPerUnitMonthly);
+            case 'taxesMonthly':        return escCsv(inp.taxesAnnual != null ? (inp.taxesAnnual / 12).toFixed(2) : '');
+            case 'taxesAnnual':         return escCsv(inp.taxesAnnual);
+            case 'insuranceMonthly':    return escCsv(inp.insuranceMonthly);
+            case 'hoaMonthly':          return escCsv(inp.hoaMonthly);
+            case 'coC':                 return escCsv(comp.cashOnCash != null ? comp.cashOnCash.toFixed(4) : '');
+            case 'capRate':             return escCsv(comp.capRate != null ? comp.capRate.toFixed(4) : '');
+            case 'dscr':                return escCsv(comp.dscr != null ? comp.dscr.toFixed(4) : '');
+            case 'suggestedRentCoC7pct':  return escCsv(typeof sugRent === 'object' ? (sugRent.coc?.pct7 ?? '') : '');
+            case 'suggestedRentCoC5pct':  return escCsv(typeof sugRent === 'object' ? (sugRent.coc?.pct5 ?? '') : '');
+            case 'suggestedRentCoC3pct':  return escCsv(typeof sugRent === 'object' ? (sugRent.coc?.pct3 ?? '') : '');
+            case 'suggestedRentCap12pct': return escCsv(typeof sugRent === 'object' ? (sugRent.cap?.pct12 ?? '') : '');
+            case 'suggestedRentCap8pct':  return escCsv(typeof sugRent === 'object' ? (sugRent.cap?.pct8 ?? '') : '');
+            case 'suggestedRentCap5pct':  return escCsv(typeof sugRent === 'object' ? (sugRent.cap?.pct5 ?? '') : '');
+            default: return '';
+          }
+        });
+        rows.push(row.join(','));
+      }
+    }
+    return rows.join('\n');
+  }
+
   if (exportBtn) {
     exportBtn.addEventListener('click', () => {
-      const props = filteredProperties();
+      const selectedIds = getSelectedIds();
+      let props = filteredProperties();
+      if (selectedIds.length > 0) {
+        props = props.filter(p => selectedIds.includes(p.id));
+      }
+
       if (exportSelect.value === 'json') {
         const blob = new Blob([JSON.stringify({ properties: props }, null, 2)], { type: 'application/json' });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
-        a.href = url; a.download = 'pat_catalogue.json'; a.click();
+        a.href = url; a.download = 'pat_catalogue_export.json'; a.click();
         URL.revokeObjectURL(url);
-        showToast('Catalogue exported as JSON', 'success');
-      } else {
-        showToast('PDF export not yet available in Supabase mode.', 'info');
+        showToast(`Exported ${props.length} propert${props.length === 1 ? 'y' : 'ies'} as JSON`, 'success');
+      } else if (exportSelect.value === 'csv') {
+        const csv  = generateCsv(props);
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = 'pat_catalogue_export.csv'; a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Exported ${props.length} propert${props.length === 1 ? 'y' : 'ies'} as CSV`, 'success');
       }
     });
   }

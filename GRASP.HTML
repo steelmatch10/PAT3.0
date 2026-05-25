@@ -164,7 +164,7 @@
           </div>
           <div class="input">
             <label>Property Location</label>
-            <input type="text" id="address" placeholder="123 Main St, City, NJ">
+            <input type="text" id="address" placeholder="123 Main St, City, NJ" readonly style="opacity:0.7;cursor:default;">
           </div>
         </div>
         <div class="input">
@@ -205,7 +205,7 @@
           </div>
           <div class="input">
             <label>Closing Costs</label>
-            <input type="number" id="closingCosts" min="0" step="100" value="15000">
+            <input type="number" id="closingCosts" min="0" step="100" placeholder="Auto: 2.5% of value">
           </div>
         </div>
         <div class="grid two">
@@ -304,7 +304,15 @@
 
         <div class="divider"></div>
         <div>
-          <div class="section-title">DSCR Price Guidance (85% NOI)</div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+            <div class="section-title" style="margin-bottom:0">DSCR Price Guidance (<span id="ieLabel">80</span>% NOI)</div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);">
+              Income Efficiency
+              <input type="number" id="incomeEfficiency" value="80" min="1" max="100" step="1"
+                style="width:64px;padding:4px 8px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--panel-2);color:var(--text);text-align:center;" />
+              %
+            </label>
+          </div>
           <div id="dscrGuide" class="grid two"></div>
         </div>
 
