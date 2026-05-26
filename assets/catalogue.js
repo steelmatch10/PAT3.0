@@ -122,7 +122,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const mod = moduleFilter.value;
 
     let props = allProperties.filter(p => {
-      const addressMatch = !q || p.address.toLowerCase().includes(q);
+      const addrFull = formatAddress(p).toLowerCase();
+      const addressMatch = !q || addrFull.includes(q);
       const moduleMatch  = !mod || p.scenarios.length === 0 || p.scenarios.some(s => s.module === mod);
       const kpiMatch     = currentView === 'table' ? passesKpiFilter(p) : true;
       return addressMatch && moduleMatch && kpiMatch;
@@ -135,7 +136,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const pinDiff = (isElevated(b) ? 1 : 0) - (isElevated(a) ? 1 : 0);
       if (pinDiff !== 0) return pinDiff;
       switch (sortCol) {
-        case 'address':    return dir * a.address.localeCompare(b.address);
+        case 'address':    return dir * (a.street || '').localeCompare(b.street || '');
         case 'scenarios':  return dir * (a.scenarios.length - b.scenarios.length);
         case 'investment': return dir * (bestInvestment(a) - bestInvestment(b));
         case 'updated':
@@ -244,10 +245,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const module     = best?.module ?? null;
       const targetPage = module === 'FRAT' ? 'FRAT.html' : 'GRASP.html';
 
-      // Split "97 Throop Ave, New Brunswick, NJ 08901" into street / locality
-      const commaIdx = p.address.indexOf(',');
-      const street   = commaIdx !== -1 ? p.address.slice(0, commaIdx) : p.address;
-      const locality = commaIdx !== -1 ? p.address.slice(commaIdx + 1).trim() : '';
+      const street   = p.street || '';
+      const locality = [p.city, p.state && p.zip ? `${p.state} ${p.zip}` : (p.state || p.zip)].filter(Boolean).join(', ');
 
       const scenLabel = scenCount === 0
         ? 'No scenarios yet'
@@ -292,9 +291,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const module     = best?.module ?? null;
       const targetPage = module === 'FRAT' ? 'FRAT.html' : 'GRASP.html';
 
-      const commaIdx = p.address.indexOf(',');
-      const street   = commaIdx !== -1 ? p.address.slice(0, commaIdx) : p.address;
-      const locality = commaIdx !== -1 ? p.address.slice(commaIdx + 1).trim() : '';
+      const street   = p.street || '';
+      const locality = [p.city, p.state && p.zip ? `${p.state} ${p.zip}` : (p.state || p.zip)].filter(Boolean).join(', ');
 
       // KPI cells
       let kpiHtml = '<span style="color:var(--muted);font-style:italic;font-size:12px;">No scenarios</span>';
@@ -514,7 +512,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     for (const p of props) {
       const scenarios = p.scenarios || [];
       if (scenarios.length === 0) {
-        rows.push(CSV_COLS.map(col => col === 'address' ? escCsv(p.address) : '').join(','));
+        rows.push(CSV_COLS.map(col => col === 'address' ? escCsv(formatAddress(p)) : '').join(','));
         continue;
       }
       for (const s of scenarios) {
@@ -523,7 +521,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const sugRent = comp.suggestedGrossRent || comp.suggestedRentPerUnit || {};
         const row = CSV_COLS.map(col => {
           switch (col) {
-            case 'address':             return escCsv(p.address);
+            case 'address':             return escCsv(formatAddress(p));
             case 'scenario_name':       return escCsv(s.scenario_name);
             case 'scenario_description': return escCsv(s.scenario_description);
             case 'module':              return escCsv(s.module);

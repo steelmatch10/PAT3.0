@@ -69,7 +69,10 @@ async function fetchProperties() {
     .from('properties')
     .select(`
       id,
-      address,
+      street,
+      city,
+      state,
+      zip,
       zillow_link,
       notes,
       created_at,
@@ -110,7 +113,7 @@ async function fetchApprovedPropertyIds() {
 async function fetchProperty(propertyId) {
   const { data, error } = await supabaseClient
     .from('properties')
-    .select('id, address, zillow_link, income_efficiency')
+    .select('id, street, city, state, zip, zillow_link, income_efficiency')
     .eq('id', propertyId)
     .single();
   if (error) { console.error('fetchProperty:', error.message); return null; }
@@ -125,10 +128,14 @@ async function updatePropertyIncomeEfficiency(propertyId, value) {
   if (error) { console.error('updatePropertyIncomeEfficiency:', error.message); }
 }
 
-async function createProperty(address, zillowLink) {
+function formatAddress({ street, city, state, zip }) {
+  return `${street}, ${city}, ${state} ${zip}`;
+}
+
+async function createProperty({ street, city, state, zip }, zillowLink) {
   const { data, error } = await supabaseClient
     .from('properties')
-    .insert({ address, zillow_link: zillowLink || null })
+    .insert({ street, city, state, zip, zillow_link: zillowLink || null })
     .select('id')
     .single();
   if (error) throw error;

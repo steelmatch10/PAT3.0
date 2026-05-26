@@ -123,78 +123,19 @@ function badgeClass(b) {
 }
 
 // -------------------------------
-// Address Parsing & Duplicate Check
+// Address Duplicate Check
 // -------------------------------
 function normalizeWhitespace(s) { return (s || "").replace(/\s+/g, " ").trim(); }
 
-/**
- * parseAddress:
- * Attempts to extract { line1, line2, city, state, zip, country } from a comma-separated string.
- * Heuristics used:
- *  - If the 2nd part looks like a unit ("Apt", "Suite", "Ste", "Unit", "#"), treat as line2, otherwise it's likely part of locality.
- *  - Country recognized as the last segment when it doesn't look like "STATE ZIP".
- *  - City/State/ZIP inferred from the tail segments. Country omitted if "United States".
- */
-function parseAddress(raw) {
-  const s = normalizeWhitespace(raw);
-  if (!s) return { raw: "", line1: "", line2: "", city: "", state: "", zip: "", country: "", normalized: "" };
-
-  const parts = s.split(",").map(p => p.trim()).filter(Boolean);
-  let line1 = "", line2 = "", city = "", state = "", zip = "", country = "";
-
-  if (parts.length === 1) {
-    line1 = parts[0];
-  } else {
-    line1 = parts[0];
-
-    // Candidate trailing segments
-    const last = parts[parts.length - 1];
-    const last2 = parts[parts.length - 2] || "";
-
-    // If last is a ZIP (##### or #####-####), then last2 should contain the state, and city is before that.
-    if (/^\d{5}(?:-\d{4})?$/.test(last)) {
-      const stz = last2.split(/\s+/);
-      state = stz[0] || "";
-      zip = last || "";
-      city = parts[parts.length - 3] || "";
-      // If second piece looks like a unit designator, capture as line2
-      if (parts[1] && /(?:apt|suite|ste|unit|#)/i.test(parts[1])) line2 = parts[1];
-    } else {
-      // Otherwise, treat last as country, and last2 as "STATE ZIP"
-      country = last;
-      const stz = last2.split(/\s+/);
-      state = stz[0] || "";
-      zip = stz[1] || "";
-      city = parts[parts.length - 3] || "";
-      if (parts[1] && /(?:apt|suite|ste|unit|#)/i.test(parts[1])) line2 = parts[1];
-    }
-
-    // Fallback: handle "line1, city state zip" (2 segments only)
-    if (!city && parts.length === 2) {
-      const rest = parts[1].split(/\s+/);
-      city = rest.slice(0, -2).join(" ") || "";
-      state = rest.slice(-2, -1)[0] || "";
-      zip = rest.slice(-1)[0] || "";
-    }
-  }
-
-  // Omit "United States" (implied default); normalize other country strings
-  if (/^(us|usa|united states|united states of america)$/i.test(country)) country = "";
-
-  const normalized = (line1 + "|" + line2 + "|" + city + "|" + state + "|" + zip + "|" + country).toLowerCase();
-  return { raw: s, line1, line2, city, state, zip, country, normalized };
-}
-
-function findDuplicateByAddress(addressRaw) {
+function findDuplicateByAddress({ street, zip }) {
   const cat = getCatalog();
-  const target = parseAddress(addressRaw);
-  if (!target.normalized) return null;
-  const hit = (cat.properties || []).find(p => {
-    const pa = parseAddress(p?.source?.address || "");
-    // Require same line1 and same normalized string for a strict duplicate
-    return pa.line1.toLowerCase() === target.line1.toLowerCase() &&
-      pa.normalized === target.normalized;
-  });
+  if (!street || !zip) return null;
+  const normStreet = normalizeWhitespace(street).toLowerCase();
+  const normZip    = normalizeWhitespace(zip).toLowerCase();
+  const hit = (cat.properties || []).find(p =>
+    normalizeWhitespace(p?.source?.street || "").toLowerCase() === normStreet &&
+    normalizeWhitespace(p?.source?.zip    || "").toLowerCase() === normZip
+  );
   return hit || null;
 }
 

@@ -44,6 +44,8 @@ UPDATE properties SET address = '420 Church Ln, North Brunswick Township, NJ 089
 UPDATE properties SET address = '11 Edgeworth Pl, New Brunswick, NJ 08901'      WHERE address ILIKE '11 Edgeworth%'            AND address NOT LIKE '%,%';
 
 UPDATE properties SET address = '12 Union St, Kingston, NJ 08528'              WHERE address ILIKE '12 Union%'                AND address NOT LIKE '%,%';
+UPDATE properties SET address = '11 N Randolphville Rd, Piscataway, NJ 08854'  WHERE address ILIKE '11%Randolphville%'         AND address NOT LIKE '%,%';
+UPDATE properties SET address = '913 Eden Ave, Highland Park, NJ 08904'         WHERE address ILIKE '913 Eden%'                AND address NOT LIKE '%,%';
 
 -- Verify: should show 0 rows if all addresses were updated
 SELECT id, address FROM properties WHERE address NOT LIKE '%,%' AND deleted_at IS NULL;

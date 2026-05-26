@@ -27,7 +27,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const els = {
     scenarioName:        document.getElementById("scenarioName"),
     scenarioDescription: document.getElementById("scenarioDescription"),
-    address:             document.getElementById("address"),
+    addrStreet:          document.getElementById("addr-street"),
+    addrCity:            document.getElementById("addr-city"),
+    addrState:           document.getElementById("addr-state"),
+    addrZip:             document.getElementById("addr-zip"),
     link:                document.getElementById("link"),
     propertyValue:       document.getElementById("propertyValue"),
     percentDownPct:      document.getElementById("percentDownPct"),
@@ -200,8 +203,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
       // New scenario: pre-populate property address/link (taxes blank since no prior scenario)
       clearFormForNew({
-        address: currentProperty?.address    ?? "",
-        link:    currentProperty?.zillow_link ?? "",
+        street: currentProperty?.street    ?? "",
+        city:   currentProperty?.city      ?? "",
+        state:  currentProperty?.state     ?? "",
+        zip:    currentProperty?.zip       ?? "",
+        link:   currentProperty?.zillow_link ?? "",
       });
     }
 
@@ -216,9 +222,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       els.scenarioSelect.value = "";
       const lastTaxesAnnual = allScenarios[0]?.inputs?.taxesAnnual ?? null;
       clearFormForNew({
-        address:      currentProperty?.address   ?? "",
-        link:         currentProperty?.zillow_link ?? "",
-        taxesAnnual:  lastTaxesAnnual,
+        street:      currentProperty?.street      ?? "",
+        city:        currentProperty?.city        ?? "",
+        state:       currentProperty?.state       ?? "",
+        zip:         currentProperty?.zip         ?? "",
+        link:        currentProperty?.zillow_link ?? "",
+        taxesAnnual: lastTaxesAnnual,
       });
       els.scenarioActionsBar.style.display = "none";
       els.archivedBadge.style.display = "none";
@@ -380,8 +389,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       } else {
         if (!currentPropertyId) {
           // Create property first from address
-          if (!normalized.address.trim()) { showSaveError("Property address is required when no property is selected."); return; }
-          const prop = await createProperty(normalized.address.trim(), normalized.link.trim() || null);
+          if (!normalized.street.trim()) { showSaveError("Property street address is required when no property is selected."); return; }
+          const prop = await createProperty({ street: normalized.street.trim(), city: normalized.city.trim(), state: normalized.state.trim(), zip: normalized.zip.trim() }, normalized.link.trim() || null);
           currentPropertyId = prop.id;
         }
         const { id } = await createScenario(currentPropertyId, scenarioData);
@@ -423,8 +432,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     lastSavedSnapshot = null;
     els.scenarioName.value        = "";
     els.scenarioDescription.value = "";
-    els.address.value             = defaults.address ?? "";
-    els.link.value                = defaults.link    ?? "";
+    els.addrStreet.value          = defaults.street ?? "";
+    els.addrCity.value            = defaults.city   ?? "";
+    els.addrState.value           = defaults.state  ?? "";
+    els.addrZip.value             = defaults.zip    ?? "";
+    els.link.value                = defaults.link   ?? "";
     els.propertyValue.value       = "";
     els.percentDownPct.value      = "";
     els.rateAprPct.value          = "";
@@ -464,7 +476,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     els.scenarioName.value        = scenario.scenario_name || "";
     els.scenarioDescription.value = scenario.scenario_description || "";
-    els.address.value             = currentProperty?.address    ?? "";
+    els.addrStreet.value          = currentProperty?.street      ?? "";
+    els.addrCity.value            = currentProperty?.city        ?? "";
+    els.addrState.value           = currentProperty?.state       ?? "";
+    els.addrZip.value             = currentProperty?.zip         ?? "";
     els.link.value                = currentProperty?.zillow_link ?? "";
     els.propertyValue.value       = inp.propertyValue ?? "";
     els.percentDownPct.value      = inp.percentDownPct ?? "";
@@ -599,7 +614,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     return {
       scenarioName:        els.scenarioName.value || "",
       scenarioDescription: els.scenarioDescription.value || "",
-      address:             els.address.value || "",
+      street:              els.addrStreet.value || "",
+      city:                els.addrCity.value   || "",
+      state:               els.addrState.value  || "",
+      zip:                 els.addrZip.value    || "",
       link:                els.link.value || "",
       propertyValue:       parseFloat(els.propertyValue.value) || 0,
       percentDownPct:      parseFloat(els.percentDownPct.value) || 0,

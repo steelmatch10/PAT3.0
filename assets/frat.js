@@ -24,7 +24,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   const els = {
-    address: document.getElementById("address"),
+    addrStreet: document.getElementById("addr-street"),
+    addrCity:   document.getElementById("addr-city"),
+    addrState:  document.getElementById("addr-state"),
+    addrZip:    document.getElementById("addr-zip"),
     link: document.getElementById("link"),
     propertyValue: document.getElementById("propertyValue"),
     percentDownPct: document.getElementById("percentDownPct"),
@@ -81,7 +84,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       currentScenarioId = s.id;
       const inp = s.inputs || {};
 
-      els.address.value         = prop?.address      ?? "";
+      els.addrStreet.value      = prop?.street        ?? "";
+      els.addrCity.value        = prop?.city          ?? "";
+      els.addrState.value       = prop?.state         ?? "";
+      els.addrZip.value         = prop?.zip           ?? "";
       els.link.value            = prop?.zillow_link  ?? "";
       els.propertyValue.value   = inp.propertyValue  ?? "";
       els.percentDownPct.value  = inp.percentDownPct ?? "";
@@ -210,7 +216,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function collectForm() {
     return {
-      address: els.address.value,
+      street: els.addrStreet.value,
+      city:   els.addrCity.value,
+      state:  els.addrState.value,
+      zip:    els.addrZip.value,
       link: els.link.value,
       propertyValue: els.propertyValue.value,
       percentDownPct: els.percentDownPct.value,
@@ -391,9 +400,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         isDirty = false;
         window.location.href = "Catalogue.html";
       } else {
-        const address = els.address.value.trim();
+        const street = els.addrStreet.value.trim();
+        const city   = els.addrCity.value.trim();
+        const state  = els.addrState.value.trim();
+        const zip    = els.addrZip.value.trim();
+        if (!street) { showToast("Street address is required.", "error"); els.addOrSaveBtn.disabled = false; els.addOrSaveBtn.textContent = "Add Property to Catalogue"; return; }
         const link    = els.link.value.trim() || null;
-        const newProp = await createProperty(address, link);
+        const newProp = await createProperty({ street, city, state, zip }, link);
         await createScenario(newProp.id, scenarioData);
         showToast("Property added.", "success");
         window.location.href = `FRAT.html?propertyId=${newProp.id}`;

@@ -44,7 +44,14 @@
         <div class="grid two">
           <div class="input">
             <label>Property Location</label>
-            <input type="text" id="address" placeholder="123 Main St, Apt 2B, City, ST 12345">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+              <input type="text" id="addr-street" placeholder="Street address" style="grid-column:1/-1;">
+              <input type="text" id="addr-city"   placeholder="City">
+              <div style="display:grid;grid-template-columns:3rem 1fr;gap:6px;">
+                <input type="text" id="addr-state" placeholder="ST"  maxlength="2">
+                <input type="text" id="addr-zip"   placeholder="ZIP" maxlength="10">
+              </div>
+            </div>
           </div>
           <div class="input">
             <label>Listing URL</label>
