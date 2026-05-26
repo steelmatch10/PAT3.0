@@ -155,32 +155,42 @@
     <div class="grid two">
       <div class="card">
 
-        <!-- ── 0. Scenario Metadata ───────────────────────────────────────── -->
-        <div class="section-title">Scenario</div>
-        <div class="grid two">
-          <div class="input">
-            <label>Scenario Name *</label>
-            <input type="text" id="scenarioName" placeholder="e.g., Best Case Scenario">
-          </div>
-          <div class="input">
-            <label>Property Location</label>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-              <input type="text" id="addr-street" placeholder="Street address" readonly style="opacity:0.7;cursor:default;grid-column:1/-1;">
-              <input type="text" id="addr-city"   placeholder="City"           readonly style="opacity:0.7;cursor:default;">
-              <div style="display:grid;grid-template-columns:3rem 1fr;gap:6px;">
-                <input type="text" id="addr-state" placeholder="ST"  readonly style="opacity:0.7;cursor:default;" maxlength="2">
-                <input type="text" id="addr-zip"   placeholder="ZIP" readonly style="opacity:0.7;cursor:default;" maxlength="10">
-              </div>
-            </div>
-          </div>
-        </div>
+        <!-- ── 0. Property ────────────────────────────────────────────────── -->
+        <div class="section-title">Property</div>
         <div class="input">
-          <label>Scenario Description</label>
-          <textarea id="scenarioDescription" rows="2" placeholder="Optional context or notes about this scenario"></textarea>
+          <label>Street Address</label>
+          <input type="text" id="addr-street" placeholder="Street address">
+        </div>
+        <div class="grid three">
+          <div class="input">
+            <label>City</label>
+            <input type="text" id="addr-city" placeholder="City">
+          </div>
+          <div class="input">
+            <label>State</label>
+            <input type="text" id="addr-state" placeholder="ST" maxlength="2">
+          </div>
+          <div class="input">
+            <label>ZIP</label>
+            <input type="text" id="addr-zip" placeholder="ZIP" maxlength="10">
+          </div>
         </div>
         <div class="input">
           <label>Listing URL</label>
           <input type="url" id="link" placeholder="https://...">
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ── 1. Scenario Metadata ───────────────────────────────────────── -->
+        <div class="section-title">Scenario</div>
+        <div class="input">
+          <label>Scenario Name *</label>
+          <input type="text" id="scenarioName" placeholder="e.g., Best Case Scenario">
+        </div>
+        <div class="input">
+          <label>Scenario Description</label>
+          <textarea id="scenarioDescription" rows="2" placeholder="Optional context or notes about this scenario"></textarea>
         </div>
 
         <div class="divider"></div>
@@ -308,6 +318,13 @@
       <aside class="card kpi-panel">
         <h2>KPIs</h2>
         <div class="kpi-badges" id="kpiBadges"></div>
+
+        <div class="divider"></div>
+        <div>
+          <div class="section-title">Capital Required</div>
+          <div id="capitalRequired" style="font-size:24px;font-weight:700;color:var(--text);margin-bottom:4px;">—</div>
+          <div id="capitalBreakdown" style="font-size:12px;color:var(--muted);"></div>
+        </div>
 
         <div class="divider"></div>
         <div>

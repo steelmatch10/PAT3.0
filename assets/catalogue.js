@@ -47,7 +47,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       .from('properties')
       .select(`
         id,
-        address,
+        street,
+        city,
+        state,
+        zip,
         zillow_link,
         created_at,
         updated_at,
@@ -97,7 +100,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     const val  = parseFloat(s.inputs?.propertyValue) || 0;
     const down = val * ((parseFloat(s.inputs?.percentDownPct) || 0) / 100);
-    return down + CONSTANTS.CLOSING_COSTS + (parseFloat(s.inputs?.estImprovementCost) || 0);
+    const closing = parseFloat(s.inputs?.closingCosts) || 0;
+    return down + closing + (parseFloat(s.inputs?.estImprovementCost) || 0);
   }
 
   function passesKpiFilter(p) {
@@ -177,7 +181,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     const val  = parseFloat(inp.propertyValue) || 0;
     const down = val * ((parseFloat(inp.percentDownPct) || 0) / 100);
-    return down + CONSTANTS.CLOSING_COSTS + (parseFloat(inp.estImprovementCost) || 0);
+    const closing = parseFloat(inp.closingCosts) || 0;
+    return down + closing + (parseFloat(inp.estImprovementCost) || 0);
   }
 
   function kpiBadgesHtml(scenario) {
@@ -324,8 +329,9 @@ document.addEventListener("DOMContentLoaded", async () => {
           </div>`;
           const val   = parseFloat(best.inputs?.propertyValue) || 0;
           const down  = val * ((parseFloat(best.inputs?.percentDownPct) || 0) / 100);
+          const closing = parseFloat(best.inputs?.closingCosts) || 0;
           const improv = parseFloat(best.inputs?.estImprovementCost) || 0;
-          investHtml = formatMoney(down + CONSTANTS.CLOSING_COSTS + improv);
+          investHtml = formatMoney(down + closing + improv);
         }
       }
 

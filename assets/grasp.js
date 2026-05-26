@@ -59,6 +59,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     insuranceLabel:      document.getElementById("insuranceLabel"),
     hoaLabel:            document.getElementById("hoaLabel"),
     kpiBadges:           document.getElementById("kpiBadges"),
+    capitalRequired:     document.getElementById("capitalRequired"),
+    capitalBreakdown:    document.getElementById("capitalBreakdown"),
     supplemental:        document.getElementById("supplemental"),
     dscrGuide:           document.getElementById("dscrGuide"),
     suggestedRentCoc:    document.getElementById("suggestedRentCoc"),
@@ -86,6 +88,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       document.querySelectorAll("#mainContent input, #mainContent select, #mainContent textarea").forEach(el => {
         el.disabled = true;
       });
+      // Scenario dropdown stays interactive — investors can browse all scenarios in read-only mode
+      if (els.scenarioSelect) els.scenarioSelect.disabled = false;
       els.addOrSaveBtn.style.display  = "none";
       els.clearBtn.style.display      = "none";
       els.newScenarioBtn.style.display = "none";
@@ -188,6 +192,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       fetchProperty(propertyId),
     ]);
 
+    if (!founder) setAddressReadonly(true);
     renderScenarioSelect(allScenarios);
 
     // Load per-property Income Efficiency from Supabase (already in currentProperty)
@@ -266,7 +271,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ── Dirty tracking ────────────────────────────────────────────────────────────
   const allInputIds = [
-    "scenarioName", "scenarioDescription", "address", "link", "propertyValue", "percentDownPct",
+    "scenarioName", "scenarioDescription", "link", "propertyValue", "percentDownPct",
     "rateAprPct", "loanLengthYears", "estImprovementCost", "closingCosts", "miscRateAnnual",
     "taxesMonthly", "insuranceMonthly", "hoaMonthly", "units", "rentPerUnitMonthly",
     "incomeEfficiency",
@@ -392,6 +397,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           if (!normalized.street.trim()) { showSaveError("Property street address is required when no property is selected."); return; }
           const prop = await createProperty({ street: normalized.street.trim(), city: normalized.city.trim(), state: normalized.state.trim(), zip: normalized.zip.trim() }, normalized.link.trim() || null);
           currentPropertyId = prop.id;
+          setAddressReadonly(true);
         }
         const { id } = await createScenario(currentPropertyId, scenarioData);
         currentScenarioId = id;
@@ -426,6 +432,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   triggerCompute();
 
   // ── Form helpers ──────────────────────────────────────────────────────────────
+
+  function setAddressReadonly(locked) {
+    [els.addrStreet, els.addrCity, els.addrState, els.addrZip].forEach(el => {
+      el.readOnly = locked;
+      el.style.opacity = locked ? "0.7" : "";
+      el.style.cursor  = locked ? "default" : "";
+    });
+  }
 
   function clearFormForNew(defaults = {}) {
     currentScenarioId = null;
@@ -656,6 +670,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     renderKPIs(kpi);
+    renderCapitalRequired(kpi, f);
     renderDSCRGuide(kpi);
     renderSuggestedRent(kpi);
     renderSupplemental(kpi, f);
@@ -698,6 +713,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       pill.addEventListener("mouseenter", () => setKpiHighlight(pill.dataset.kpi, true));
       pill.addEventListener("mouseleave", () => setKpiHighlight(pill.dataset.kpi, false));
     });
+  }
+
+  function renderCapitalRequired(k, f) {
+    const n = k.inputsNormalized;
+    const total = n.downPayment + n.closingCosts + (f.estImprovementCost || 0);
+    if (!els.capitalRequired) return;
+    els.capitalRequired.textContent = total > 0 ? formatMoney(total) : '—';
+    els.capitalBreakdown.textContent = total > 0
+      ? `${formatMoney(n.downPayment)} down · ${formatMoney(n.closingCosts)} closing · ${formatMoney(f.estImprovementCost || 0)} improvements`
+      : 'Enter property value and down % to calculate';
   }
 
   function renderDSCRGuide(k) {

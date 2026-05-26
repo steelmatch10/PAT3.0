@@ -3,11 +3,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   window._patCurrentMember = null;
 
   // ── Auth gate ────────────────────────────────────────────────────────────────
+  const authSpinner = document.getElementById("authSpinner");
+  const mainContent = document.getElementById("mainContent");
+
   const user = await initAuth();
   if (!user) return; // redirected to login.html
 
   const member  = await getCurrentMember();
   const founder = member?.global_role === "founder";
+
+  authSpinner.style.display = "none";
+  mainContent.classList.add("visible");
 
   initProfileWidget(user, member);
   document.getElementById("logoutBtn").addEventListener("click", patSignOut);
@@ -43,7 +49,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     comments: document.getElementById("comments"),
 
     addOrSaveBtn: document.getElementById("addOrSaveBtn"),
-    clearBtn: document.getElementById("clearBtn"),
+    clearBtn:     document.getElementById("clearBtn"),
+    saveError:    document.getElementById("saveError"),
 
     viewModeToggle: document.getElementById("viewModeToggle"),
     viewModeLabel: document.getElementById("viewModeLabel"),
@@ -51,7 +58,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     insuranceLabel: document.getElementById("insuranceLabel"),
     hoaLabel: document.getElementById("hoaLabel"),
 
-    kpiBadges: document.getElementById("kpiBadges"),
+    kpiBadges:        document.getElementById("kpiBadges"),
+    capitalRequired:  document.getElementById("capitalRequired"),
+    capitalBreakdown: document.getElementById("capitalBreakdown"),
     netIncomeBox: document.getElementById("netIncomeBox"),
     suggestedARV: document.getElementById("suggestedARV"),
     supplemental: document.getElementById("supplemental"),
@@ -78,6 +87,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       fetchScenarios(_fratPropId),
       fetchProperty(_fratPropId),
     ]);
+
+    if (!founder) setAddressReadonly(true);
 
     if (scenarios.length > 0) {
       const s = scenarios[0];
@@ -287,6 +298,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const n = collectNums();
     const r = computeFRAT(n);
     renderKPIs(r);
+    renderCapitalRequired(r);
     renderNetIncome(r);
     renderSuggestedARV(r);
     renderSupplemental(r);
@@ -295,11 +307,47 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  function renderCapitalRequired(r) {
+    if (!els.capitalRequired) return;
+    const s = r.supp;
+    const total = (s.downPayment || 0) + (s.closingCosts || 0) + (s.estFixingCost || 0);
+    els.capitalRequired.textContent = total > 0 ? formatMoney(total) : '—';
+    els.capitalBreakdown.textContent = total > 0
+      ? `${formatMoney(s.downPayment || 0)} down · ${formatMoney(s.closingCosts || 0)} closing · ${formatMoney(s.estFixingCost || 0)} rehab`
+      : 'Enter property value and down % to calculate';
+  }
+
+  function setAddressReadonly(locked) {
+    [els.addrStreet, els.addrCity, els.addrState, els.addrZip].forEach(el => {
+      el.readOnly = locked;
+      el.style.opacity = locked ? "0.7" : "";
+      el.style.cursor  = locked ? "default" : "";
+    });
+  }
+
+  const KPI_REQUIRED_FIELDS = {
+    roi: ["propertyValue", "percentDownPct", "rateAprPct", "loanLengthYears", "estFixingCost", "monthsHold", "desiredARV", "taxesMonthly", "insuranceMonthly", "hoaMonthly"],
+  };
+
+  function setKpiHighlight(kpiKey, active) {
+    const fields = KPI_REQUIRED_FIELDS[kpiKey] || [];
+    fields.forEach(id => {
+      const el = document.getElementById(id);
+      const wrap = el?.closest(".input");
+      if (wrap) wrap.classList.toggle("highlight-required", active);
+    });
+  }
+
   function renderKPIs(r) {
     const roiPct = isFinite(r.roi) ? (r.roi * 100).toFixed(2) + "%" : "N/A";
     const band = bandROI(r.roi);
     const tip = "ROI = (Desired ARV − Total Losses) / Total Losses";
-    els.kpiBadges.innerHTML = `<div class="${kpiClass(band)}" title="${tip}">ROI <span class="value">${roiPct}</span></div>`;
+    els.kpiBadges.innerHTML = `<div class="${kpiClass(band)}" title="${tip}" data-kpi="roi" style="cursor:default">ROI <span class="value">${roiPct}</span></div>`;
+
+    els.kpiBadges.querySelectorAll("[data-kpi]").forEach(pill => {
+      pill.addEventListener("mouseenter", () => setKpiHighlight(pill.dataset.kpi, true));
+      pill.addEventListener("mouseleave", () => setKpiHighlight(pill.dataset.kpi, false));
+    });
   }
 
   function renderNetIncome(r) {
