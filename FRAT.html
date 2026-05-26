@@ -14,6 +14,36 @@
     #mainContent.visible { display: block; }
     .btn-danger { background: rgba(239,68,68,.12); color: var(--bad); border: 1px solid rgba(239,68,68,.3); }
     .btn-danger:hover { background: rgba(239,68,68,.2); }
+    .scenario-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .scenario-bar select {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      padding: 7px 10px;
+      flex: 1;
+      min-width: 180px;
+      outline: none;
+    }
+    .scenario-bar select:focus { border-color: var(--brand); }
+    .scenario-archived-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(239,68,68,.12);
+      color: var(--bad);
+    }
+    .scenario-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   </style>
   <script defer src="assets/app.js"></script>
   <script defer src="assets/frat.js"></script>
@@ -36,6 +66,17 @@
         <button class="btn" id="logoutBtn">Sign out</button>
       </nav>
     </header>
+
+    <!-- Scenario selector (shown when propertyId is in URL) -->
+    <div class="scenario-bar" id="scenarioBar" style="display:none;">
+      <span style="font-size:13px;color:var(--muted);white-space:nowrap;">Scenario:</span>
+      <select id="scenarioSelect"></select>
+      <button class="btn" id="newScenarioBtn">+ New Scenario</button>
+      <div class="scenario-actions" id="scenarioActionsBar" style="display:none;">
+        <button class="btn btn-danger" id="archiveScenarioBtn">Archive</button>
+      </div>
+      <span class="scenario-archived-badge" id="archivedBadge" style="display:none;">Archived</span>
+    </div>
 
     <div id="readOnlyBanner" style="display:none;padding:12px 16px;margin-bottom:16px;background:rgba(110,168,254,.1);border:1px solid rgba(110,168,254,.3);border-radius:8px;color:var(--muted);font-size:13px;">
       You have read-only access to this property. To request editing permissions, contact a team founder.
@@ -66,6 +107,19 @@
         <div class="input">
           <label>Listing URL</label>
           <input type="url" id="link" placeholder="https://...">
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Scenario -->
+        <div class="section-title">Scenario</div>
+        <div class="input">
+          <label>Scenario Name *</label>
+          <input type="text" id="scenarioName" placeholder="e.g., Base Case">
+        </div>
+        <div class="input">
+          <label>Scenario Description</label>
+          <textarea id="scenarioDescription" rows="2" placeholder="Optional context or notes about this scenario"></textarea>
         </div>
 
         <div class="divider"></div>

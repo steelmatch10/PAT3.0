@@ -35,6 +35,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     addrState:  document.getElementById("addr-state"),
     addrZip:    document.getElementById("addr-zip"),
     link: document.getElementById("link"),
+    scenarioName:        document.getElementById("scenarioName"),
+    scenarioDescription: document.getElementById("scenarioDescription"),
     propertyValue: document.getElementById("propertyValue"),
     percentDownPct: document.getElementById("percentDownPct"),
     rateAprPct: document.getElementById("rateAprPct"),
@@ -65,11 +67,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     suggestedARV: document.getElementById("suggestedARV"),
     supplemental: document.getElementById("supplemental"),
     moreDetails: document.getElementById("moreDetails"),
+
+    scenarioBar:        document.getElementById("scenarioBar"),
+    scenarioSelect:     document.getElementById("scenarioSelect"),
+    newScenarioBtn:     document.getElementById("newScenarioBtn"),
+    scenarioActionsBar: document.getElementById("scenarioActionsBar"),
+    archiveScenarioBtn: document.getElementById("archiveScenarioBtn"),
+    archivedBadge:      document.getElementById("archivedBadge"),
   };
 
   let lastSavedSnapshot = null;
   let isDirty = false;
   let currentScenarioId = null;
+  let currentPropertyId = _fratPropId || null;
+  let allScenarios = [];
+  let currentProperty = null;
+
+  // Initialize view mode from localStorage (shared preference with GRASP)
+  {
+    const saved = readViewMode();
+    const startMode = saved === "annual" ? "annual" : "monthly";
+    document.body.dataset.carryMode = startMode;
+    els.viewModeToggle.checked = startMode === "annual";
+    els.viewModeLabel.textContent = startMode === "annual" ? "Annual view" : "Monthly view";
+    setCarryCostLabels(startMode);
+  }
 
   initPlaceholders();
 
@@ -78,57 +100,80 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelectorAll("input, select, textarea").forEach(el => {
       el.disabled = true;
     });
-    els.addOrSaveBtn.style.display = "none";
-    els.clearBtn.style.display     = "none";
+    if (els.scenarioSelect) els.scenarioSelect.disabled = false;
+    els.addOrSaveBtn.style.display  = "none";
+    els.clearBtn.style.display      = "none";
+    if (els.newScenarioBtn)     els.newScenarioBtn.style.display     = "none";
+    if (els.archiveScenarioBtn) els.archiveScenarioBtn.style.display = "none";
   }
 
   if (_fratPropId) {
-    const [scenarios, prop] = await Promise.all([
+    els.scenarioBar.style.display = "flex";
+    [allScenarios, currentProperty] = await Promise.all([
       fetchScenarios(_fratPropId),
       fetchProperty(_fratPropId),
     ]);
 
     if (!founder) setAddressReadonly(true);
 
-    if (scenarios.length > 0) {
-      const s = scenarios[0];
-      currentScenarioId = s.id;
-      const inp = s.inputs || {};
+    renderScenarioSelect(allScenarios);
 
-      els.addrStreet.value      = prop?.street        ?? "";
-      els.addrCity.value        = prop?.city          ?? "";
-      els.addrState.value       = prop?.state         ?? "";
-      els.addrZip.value         = prop?.zip           ?? "";
-      els.link.value            = prop?.zillow_link  ?? "";
-      els.propertyValue.value   = inp.propertyValue  ?? "";
-      els.percentDownPct.value  = inp.percentDownPct ?? "";
-      els.rateAprPct.value      = inp.rateAprPct     ?? "";
-      els.loanLengthYears.value = inp.loanLengthYears ?? 30;
-      els.estFixingCost.value   = inp.estFixingCost  ?? "";
-      els.monthsHold.value      = inp.monthsHold     ?? "";
-      els.desiredARV.value      = inp.desiredARV     ?? "";
-      els.comments.value        = s.scenario_description ?? "";
-      els.interestOnlyToggle.checked = !!inp.interestOnly;
-
-      // taxesAnnual stored annually in DB — display monthly
-      els.taxesMonthly.value     = inp.taxesAnnual != null ? round2(inp.taxesAnnual / 12) : "";
-      els.insuranceMonthly.value = inp.insuranceMonthly ?? "";
-      els.hoaMonthly.value       = inp.hoaMonthly       ?? "";
-
-      els.viewModeToggle.checked      = false;
-      document.body.dataset.carryMode = "monthly";
-      els.viewModeLabel.textContent   = "Monthly view";
-      setCarryCostLabels("monthly");
-
-      els.addOrSaveBtn.textContent = "Save Changes";
-      lastSavedSnapshot = JSON.stringify(collectForm());
-      els.addOrSaveBtn.disabled = true;
-      triggerCompute();
+    if (allScenarios.length > 0) {
+      loadScenarioIntoForm(allScenarios[0]);
     } else {
-      hardResetForm();
+      clearFormForNew({
+        street: currentProperty?.street      ?? "",
+        city:   currentProperty?.city        ?? "",
+        state:  currentProperty?.state       ?? "",
+        zip:    currentProperty?.zip         ?? "",
+        link:   currentProperty?.zillow_link ?? "",
+      });
     }
+
+    els.scenarioSelect.addEventListener("change", () => {
+      const sel = allScenarios.find(s => s.id === els.scenarioSelect.value);
+      if (sel) loadScenarioIntoForm(sel);
+      else clearFormForNew();
+    });
+
+    els.newScenarioBtn.addEventListener("click", () => {
+      currentScenarioId = null;
+      els.scenarioSelect.value = "";
+      const lastTaxesAnnual = allScenarios[0]?.inputs?.taxesAnnual ?? null;
+      clearFormForNew({
+        street:      currentProperty?.street      ?? "",
+        city:        currentProperty?.city        ?? "",
+        state:       currentProperty?.state       ?? "",
+        zip:         currentProperty?.zip         ?? "",
+        link:        currentProperty?.zillow_link ?? "",
+        taxesAnnual: lastTaxesAnnual,
+      });
+      els.scenarioActionsBar.style.display = "none";
+      els.archivedBadge.style.display = "none";
+    });
+
+    els.archiveScenarioBtn.addEventListener("click", async () => {
+      if (!currentScenarioId) return;
+      const ok = await showConfirm({
+        title: "Archive scenario",
+        message: "Archive this scenario? It won't appear by default, but can be restored.",
+        okText: "Archive",
+        cancelText: "Cancel",
+      });
+      if (!ok) return;
+      try {
+        await archiveScenario(currentScenarioId);
+        showToast("Scenario archived.", "success");
+        allScenarios = await fetchScenarios(_fratPropId);
+        renderScenarioSelect(allScenarios);
+        if (allScenarios.length > 0) loadScenarioIntoForm(allScenarios[0]);
+        else clearFormForNew();
+      } catch (err) {
+        showSaveError(err.message || "Failed to archive scenario.");
+      }
+    });
   } else {
-    hardResetForm();
+    clearFormForNew();
   }
 
   // ===== View mode (Monthly/Annual) — robust handler =====
@@ -152,31 +197,108 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.viewModeLabel.textContent = (toMode === "annual") ? "Annual view" : "Monthly view";
     setCarryCostLabels(toMode);
     document.body.dataset.carryMode = toMode;
+    saveViewMode(toMode);
 
     triggerCompute();
   });
 
-  function hardResetForm() {
-    [
-      els.address, els.link, els.propertyValue, els.percentDownPct, els.rateAprPct,
-      els.loanLengthYears, els.estFixingCost, els.taxesMonthly, els.insuranceMonthly,
-      els.hoaMonthly, els.monthsHold, els.desiredARV, els.comments
-    ].forEach(el => { if (!el) return; el.value = (el.id === "loanLengthYears") ? 30 : ""; });
+  function renderScenarioSelect(scenarios) {
+    const opts = scenarios.map(s => {
+      const label = s.scenario_name + (s.archived_at ? " (archived)" : "");
+      return `<option value="${s.id}">${label}</option>`;
+    });
+    if (scenarios.length === 0) {
+      opts.push('<option value="">No scenarios — create one below</option>');
+    }
+    els.scenarioSelect.innerHTML = opts.join("");
+    if (scenarios.length > 0) els.scenarioSelect.value = scenarios[0].id;
+    else els.scenarioSelect.value = "";
+  }
+
+  function loadScenarioIntoForm(scenario) {
+    currentScenarioId = scenario.id;
+    const inp = scenario.inputs || {};
+    const mode = document.body.dataset.carryMode || "monthly";
+
+    if (els.scenarioName)        els.scenarioName.value        = scenario.scenario_name || "";
+    if (els.scenarioDescription) els.scenarioDescription.value = scenario.scenario_description || "";
+    els.addrStreet.value      = currentProperty?.street      ?? "";
+    els.addrCity.value        = currentProperty?.city        ?? "";
+    els.addrState.value       = currentProperty?.state       ?? "";
+    els.addrZip.value         = currentProperty?.zip         ?? "";
+    els.link.value            = currentProperty?.zillow_link ?? "";
+    els.propertyValue.value   = inp.propertyValue  ?? "";
+    els.percentDownPct.value  = inp.percentDownPct ?? "";
+    els.rateAprPct.value      = inp.rateAprPct     ?? "";
+    els.loanLengthYears.value = inp.loanLengthYears ?? 30;
+    els.estFixingCost.value   = inp.estFixingCost  ?? "";
+    els.monthsHold.value      = inp.monthsHold     ?? "";
+    els.desiredARV.value      = inp.desiredARV     ?? "";
+    els.comments.value        = inp.comments       ?? "";
+    els.interestOnlyToggle.checked = !!inp.interestOnly;
+
+    // taxesAnnual stored annually; display based on current view mode
+    const taxesAnnual = inp.taxesAnnual ?? 0;
+    els.taxesMonthly.value     = mode === "annual" ? taxesAnnual : round2(taxesAnnual / 12);
+    const insM = inp.insuranceMonthly ?? 0;
+    const hoaM = inp.hoaMonthly ?? 0;
+    els.insuranceMonthly.value = mode === "annual" ? round2(insM * 12) : insM;
+    els.hoaMonthly.value       = mode === "annual" ? round2(hoaM * 12) : hoaM;
+
+    // Archive state
+    if (scenario.archived_at) {
+      els.archivedBadge.style.display = "inline";
+      if (els.archiveScenarioBtn) els.archiveScenarioBtn.style.display = "none";
+    } else {
+      els.archivedBadge.style.display = "none";
+      if (!readOnly && els.archiveScenarioBtn) {
+        els.archiveScenarioBtn.style.display = "";
+        els.scenarioActionsBar.style.display = "flex";
+      }
+    }
+
+    triggerCompute();
+    lastSavedSnapshot = JSON.stringify(collectForm());
+    els.addOrSaveBtn.disabled = true;
+    els.addOrSaveBtn.textContent = "Save Changes";
+  }
+
+  function clearFormForNew(defaults = {}) {
+    currentScenarioId = null;
+    lastSavedSnapshot = null;
+
+    if (els.scenarioName)        els.scenarioName.value        = "";
+    if (els.scenarioDescription) els.scenarioDescription.value = "";
+    els.addrStreet.value      = defaults.street ?? "";
+    els.addrCity.value        = defaults.city   ?? "";
+    els.addrState.value       = defaults.state  ?? "";
+    els.addrZip.value         = defaults.zip    ?? "";
+    els.link.value            = defaults.link   ?? "";
+    els.propertyValue.value   = "";
+    els.percentDownPct.value  = "";
+    els.rateAprPct.value      = "";
+    els.loanLengthYears.value = "30";
+    els.estFixingCost.value   = "";
+    els.monthsHold.value      = "";
+    els.desiredARV.value      = "";
+    els.comments.value        = "";
     els.interestOnlyToggle.checked = false;
 
-    // Initialize toggle state & labels deterministically
-    els.viewModeToggle.checked = false;
-    document.body.dataset.carryMode = "monthly";
-    els.viewModeLabel.textContent = "Monthly view";
-    setCarryCostLabels("monthly");
+    // Carry taxes from previous scenario if provided
+    const mode = document.body.dataset.carryMode || "monthly";
+    if (defaults.taxesAnnual != null) {
+      els.taxesMonthly.value = mode === "annual" ? defaults.taxesAnnual : round2(defaults.taxesAnnual / 12);
+    } else {
+      els.taxesMonthly.value = "";
+    }
+    els.insuranceMonthly.value = "";
+    els.hoaMonthly.value       = "";
+
+    if (els.archivedBadge) els.archivedBadge.style.display = "none";
 
     isDirty = false;
-    lastSavedSnapshot = null;
-    currentScenarioId = null;
-
-    els.addOrSaveBtn.textContent = "Add Property to Catalogue";
+    els.addOrSaveBtn.textContent = "Save Scenario";
     els.addOrSaveBtn.disabled    = false;
-    delete els.addOrSaveBtn.dataset.dupId;
 
     triggerCompute();
   }
@@ -190,7 +312,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Recompute on input
-  const watched = ["address", "link", "propertyValue", "percentDownPct", "rateAprPct", "loanLengthYears",
+  const watched = ["scenarioName", "scenarioDescription", "link", "propertyValue", "percentDownPct", "rateAprPct", "loanLengthYears",
     "estFixingCost", "taxesMonthly", "insuranceMonthly", "hoaMonthly", "monthsHold", "desiredARV", "comments"];
   ["input", "change"].forEach(evt => {
     watched.forEach(id => {
@@ -227,6 +349,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function collectForm() {
     return {
+      scenarioName:        els.scenarioName?.value        ?? "",
+      scenarioDescription: els.scenarioDescription?.value ?? "",
       street: els.addrStreet.value,
       city:   els.addrCity.value,
       state:  els.addrState.value,
@@ -370,7 +494,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const s = r.supp;
     const rows = [
       { label: "Down Payment", val: formatMoney(s.downPayment), tip: "Down = Property Value × Percent Down" },
-      { label: "Closing Costs (est.)", val: formatMoney(s.closingCosts), tip: `Closing = flat ${formatMoney(CONSTANTS.CLOSING_COSTS)} worst-case estimate` },
+      { label: "Closing Costs (est.)", val: formatMoney(s.closingCosts), tip: "Closing = 5% of acquisition value (est.)" },
       { label: "Loan Amount", val: formatMoney(s.loanAmount), tip: "Loan = Property Value − Down" },
       { label: "Mortgage (Monthly)", val: formatMoney(s.mortgageMonthly), tip: s.interestOnly ? "Interest-only: Loan × (APR/12)" : "PMT = r·L / (1 − (1+r)^−n)" },
       { label: "Operating Expenses (Monthly)", val: formatMoney(s.operatingExpensesMonthly), tip: "Taxes + Insurance + HOA + Misc(1%/yr ÷ 12)" },
@@ -393,18 +517,25 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Save to Supabase
   els.addOrSaveBtn.addEventListener("click", async () => {
+    const f = collectForm();
     const n = collectNums();
-    const minimalOk = (+n.propertyValue > 0 && +n.percentDownPct >= 0 && +n.rateAprPct >= 0);
-    if (!minimalOk) {
-      showToast("Provide at least: Property Value, Percent Down, Rate.", "info", { title: "Missing required inputs" });
+
+    if (!f.scenarioName.trim()) {
+      showSaveError("Scenario name is required.");
       return;
     }
+    const minimalOk = (+n.propertyValue > 0 && +n.percentDownPct >= 0 && +n.rateAprPct >= 0);
+    if (!minimalOk) {
+      showSaveError("Provide at least: Property Value, Percent Down, Rate.");
+      return;
+    }
+    hideSaveError();
 
     const r = computeFRAT(n);
     const scenarioData = {
       module: 'FRAT',
-      scenario_name: 'Base Case',
-      scenario_description: els.comments.value || null,
+      scenario_name: f.scenarioName.trim(),
+      scenario_description: f.scenarioDescription.trim() || null,
       bedrooms_or_units: 0,
       calculate_per_bedroom: false,
       bedroom_details: null,
@@ -420,6 +551,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         monthsHold:       +n.monthsHold,
         desiredARV:       +n.desiredARV,
         interestOnly:     !!n.interestOnly,
+        comments:         f.comments,
       },
       computed: {
         ownershipCostMonthly:      round2(r.supp.ownershipCostMonthly),
@@ -443,31 +575,51 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       if (currentScenarioId) {
         await updateScenario(currentScenarioId, scenarioData);
-        showToast("Changes saved.", "success");
+        showToast("Scenario saved.", "success");
         lastSavedSnapshot = JSON.stringify(collectForm());
         isDirty = false;
-        window.location.href = "Catalogue.html";
+        // Refresh dropdown label (name may have changed)
+        allScenarios = await fetchScenarios(_fratPropId);
+        renderScenarioSelect(allScenarios);
+        els.scenarioSelect.value = currentScenarioId;
       } else {
-        const street = els.addrStreet.value.trim();
-        const city   = els.addrCity.value.trim();
-        const state  = els.addrState.value.trim();
-        const zip    = els.addrZip.value.trim();
-        if (!street) { showToast("Street address is required.", "error"); els.addOrSaveBtn.disabled = false; els.addOrSaveBtn.textContent = "Add Property to Catalogue"; return; }
-        const link    = els.link.value.trim() || null;
-        const newProp = await createProperty({ street, city, state, zip }, link);
-        await createScenario(newProp.id, scenarioData);
-        showToast("Property added.", "success");
-        window.location.href = `FRAT.html?propertyId=${newProp.id}`;
+        if (!currentPropertyId) {
+          const street = els.addrStreet.value.trim();
+          const city   = els.addrCity.value.trim();
+          const state  = els.addrState.value.trim();
+          const zip    = els.addrZip.value.trim();
+          if (!street) { showSaveError("Street address is required."); els.addOrSaveBtn.disabled = false; els.addOrSaveBtn.textContent = "Save Scenario"; return; }
+          const link    = els.link.value.trim() || null;
+          const newProp = await createProperty({ street, city, state, zip }, link);
+          currentPropertyId = newProp.id;
+          setAddressReadonly(true);
+        }
+        const { id } = await createScenario(currentPropertyId, scenarioData);
+        currentScenarioId = id;
+        showToast("Scenario saved.", "success");
+        allScenarios = await fetchScenarios(currentPropertyId);
+        renderScenarioSelect(allScenarios);
+        els.scenarioSelect.value = id;
+        els.scenarioActionsBar.style.display = "flex";
+        const newUrl = new URL(location.href);
+        newUrl.searchParams.set("propertyId", currentPropertyId);
+        history.replaceState({}, "", newUrl.toString());
+        els.scenarioBar.style.display = "flex";
+        lastSavedSnapshot = JSON.stringify(collectForm());
       }
     } catch (err) {
-      showToast("Save failed: " + err.message, "error");
+      showSaveError(err.message || "Save failed.");
       els.addOrSaveBtn.disabled = false;
-      els.addOrSaveBtn.textContent = currentScenarioId ? "Save Changes" : "Add Property to Catalogue";
+      els.addOrSaveBtn.textContent = currentScenarioId ? "Save Changes" : "Save Scenario";
+      return;
     }
+
+    els.addOrSaveBtn.disabled = (lastSavedSnapshot !== null && JSON.stringify(collectForm()) === lastSavedSnapshot);
+    els.addOrSaveBtn.textContent = "Save Changes";
   });
 
   // Clear
-  els.clearBtn.addEventListener("click", () => { hardResetForm(); });
+  els.clearBtn.addEventListener("click", () => { clearFormForNew(); });
 
   // ----- Custom Back/Forward Guard via History API -----
   const historyGuard = (function () {
@@ -542,7 +694,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const pv = n.propertyValue || 0;
   const down = pv * ((n.percentDownPct || 0) / 100);
   const loan = Math.max(pv - down, 0);
-  const closing = CONSTANTS.CLOSING_COSTS;
+  const closing = pv > 0 ? Math.round(pv * 0.05) : 0; // FRAT closing = 5% of acquisition value
   const miscMonthly = pv * CONSTANTS.MISC_RATE_ANNUAL / 12;
 
   // Ensure all values are monthly
@@ -614,5 +766,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (v >= CONSTANTS.ROI_BANDS[3]) return { label: "Okay" };
     if (v >= 0) return { label: "Bad" };
     return { label: "Negative" };
+  }
+
+  function showSaveError(msg) {
+    if (!els.saveError) return;
+    els.saveError.textContent = msg;
+    els.saveError.style.display = "block";
+  }
+  function hideSaveError() {
+    if (!els.saveError) return;
+    els.saveError.style.display = "none";
   }
 });
