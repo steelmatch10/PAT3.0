@@ -69,7 +69,10 @@ async function fetchProperties() {
     .from('properties')
     .select(`
       id,
-      address,
+      street,
+      city,
+      state,
+      zip,
       zillow_link,
       notes,
       created_at,
@@ -110,17 +113,29 @@ async function fetchApprovedPropertyIds() {
 async function fetchProperty(propertyId) {
   const { data, error } = await supabaseClient
     .from('properties')
-    .select('id, address, zillow_link')
+    .select('id, street, city, state, zip, zillow_link, income_efficiency')
     .eq('id', propertyId)
     .single();
   if (error) { console.error('fetchProperty:', error.message); return null; }
   return data;
 }
 
-async function createProperty(address, zillowLink) {
+async function updatePropertyIncomeEfficiency(propertyId, value) {
+  const { error } = await supabaseClient
+    .from('properties')
+    .update({ income_efficiency: value })
+    .eq('id', propertyId);
+  if (error) { console.error('updatePropertyIncomeEfficiency:', error.message); }
+}
+
+function formatAddress({ street, city, state, zip }) {
+  return `${street}, ${city}, ${state} ${zip}`;
+}
+
+async function createProperty({ street, city, state, zip }, zillowLink) {
   const { data, error } = await supabaseClient
     .from('properties')
-    .insert({ address, zillow_link: zillowLink || null })
+    .insert({ street, city, state, zip, zillow_link: zillowLink || null })
     .select('id')
     .single();
   if (error) throw error;
@@ -222,4 +237,65 @@ async function restoreScenario(scenarioId) {
     .update({ archived_at: null })
     .eq('id', scenarioId);
   if (error) throw error;
+}
+
+/**
+ * Recompute all active GRASP scenarios and flush updated computed + bands to Supabase.
+ * Called once at login — runs in the background, does not block page render.
+ * Also pulls each property's income_efficiency so DSCR guidance uses the correct value.
+ */
+async function recomputeAllScenarios() {
+  // Fetch all active GRASP scenarios with their property's income_efficiency in one query
+  const { data: scenarios, error } = await supabaseClient
+    .from('scenarios')
+    .select('id, inputs, computed, bedrooms_or_units, bedroom_details, calculate_per_bedroom, properties(income_efficiency)')
+    .eq('module', 'GRASP')
+    .is('archived_at', null);
+
+  if (error) { console.error('recomputeAllScenarios fetch:', error.message); return; }
+  if (!scenarios || scenarios.length === 0) return;
+
+  const updates = scenarios.map(s => {
+    const inp = s.inputs || {};
+    const incomeEfficiencyPct = s.properties?.income_efficiency ?? 80;
+    // inputs stores taxesAnnual; computeAll expects taxesMonthly
+    const taxesMonthly = (inp.taxesAnnual ?? 0) / 12;
+
+    // Derive rentPerUnitMonthly: prefer stored input, then bedroom_details, then legacy grossRentMonthly
+    let rentPerUnitMonthly = 0;
+    if (inp.rentPerUnitMonthly != null) {
+      rentPerUnitMonthly = inp.rentPerUnitMonthly;
+    } else if (s.calculate_per_bedroom && s.bedroom_details?.length) {
+      const total = s.bedroom_details.reduce((sum, b) => sum + (b.bedroomRent || 0), 0);
+      rentPerUnitMonthly = s.bedrooms_or_units > 0 ? total / s.bedrooms_or_units : 0;
+    } else {
+      const grossRent = s.computed?.grossRentMonthly || 0;
+      rentPerUnitMonthly = s.bedrooms_or_units > 0 ? grossRent / s.bedrooms_or_units : 0;
+    }
+
+    const result = computeAll({
+      ...inp,
+      taxesMonthly,
+      rentPerUnitMonthly,
+      bedroomsOrUnits: s.bedrooms_or_units,
+      incomeEfficiencyPct,
+    });
+    return {
+      id: s.id,
+      computed: result.computed,
+      bands: result.bands,
+      updated_at: new Date().toISOString(),
+    };
+  });
+
+  // Write updates in parallel (each is a single-row update; small fleet so no chunking needed)
+  await Promise.allSettled(
+    updates.map(u =>
+      supabaseClient.from('scenarios').update({
+        computed: u.computed,
+        bands: u.bands,
+        updated_at: u.updated_at,
+      }).eq('id', u.id)
+    )
+  );
 }

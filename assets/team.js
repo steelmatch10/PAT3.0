@@ -25,9 +25,9 @@
     supabaseClient.from('team_members').select('*').order('global_role').order('email'),
     supabaseClient.from('property_access').select(`
       id, user_id, role, access_approved_at,
-      properties(id, address)
+      properties(id, street, city, state, zip)
     `).not('access_approved_at', 'is', null),
-    supabaseClient.from('properties').select('id, address').is('deleted_at', null).order('address'),
+    supabaseClient.from('properties').select('id, street, city, state, zip').is('deleted_at', null).order('street'),
   ]);
 
   const members    = membersRes.data  || [];
@@ -40,7 +40,7 @@
     const pid = row.properties?.id;
     if (!pid) return;
     if (!accessMap[row.user_id]) accessMap[row.user_id] = {};
-    accessMap[row.user_id][pid] = { accessRowId: row.id, address: row.properties.address };
+    accessMap[row.user_id][pid] = { accessRowId: row.id, address: formatAddress(row.properties) };
   });
 
   document.getElementById('teamSpinner').style.display = 'none';
@@ -116,7 +116,7 @@
                 .map(p => `
                 <label class="access-panel-item">
                   <input type="checkbox" data-property-id="${p.id}" ${assigned[p.id] ? 'checked' : ''} />
-                  ${escapeHtml(p.address)}
+                  ${escapeHtml(formatAddress(p))}
                 </label>`).join('')}
             </div>
           </div>
@@ -309,7 +309,7 @@
             .single();
           if (!error && prop) {
             if (!accessMap[userId]) accessMap[userId] = {};
-            accessMap[userId][pid] = { accessRowId: data.id, address: prop.address };
+            accessMap[userId][pid] = { accessRowId: data.id, address: formatAddress(prop) };
           }
         }
 

@@ -181,3 +181,35 @@ CREATE POLICY "investors_read_founders" ON team_members
 -- TEAM_MEMBERS: founders manage all rows
 CREATE POLICY "founders_manage_team_members" ON team_members
   FOR ALL USING (get_my_role() = 'founder');
+
+-- ============================================================
+-- MIGRATIONS (run these after initial schema creation)
+-- ============================================================
+
+-- v2.1: Add income_efficiency to properties (per-property DSCR guidance setting)
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS income_efficiency NUMERIC DEFAULT 80;
+
+-- v2.2: Split address into discrete columns; drop single-string address column
+ALTER TABLE properties
+  ADD COLUMN IF NOT EXISTS street TEXT,
+  ADD COLUMN IF NOT EXISTS city   TEXT,
+  ADD COLUMN IF NOT EXISTS state  TEXT,
+  ADD COLUMN IF NOT EXISTS zip    TEXT;
+
+UPDATE properties
+SET
+  street = TRIM(SPLIT_PART(address, ',', 1)),
+  city   = TRIM(SPLIT_PART(address, ',', 2)),
+  state  = TRIM(SPLIT_PART(SPLIT_PART(address, ',', 3), ' ', 2)),
+  zip    = TRIM(SPLIT_PART(SPLIT_PART(address, ',', 3), ' ', 3))
+WHERE street IS NULL;
+
+ALTER TABLE properties
+  ALTER COLUMN street SET NOT NULL,
+  ALTER COLUMN city   SET NOT NULL,
+  ALTER COLUMN state  SET NOT NULL,
+  ALTER COLUMN zip    SET NOT NULL;
+
+ALTER TABLE properties DROP CONSTRAINT IF EXISTS address_unique;
+ALTER TABLE properties ADD CONSTRAINT address_street_zip_unique UNIQUE (street, zip);
+ALTER TABLE properties DROP COLUMN IF EXISTS address;

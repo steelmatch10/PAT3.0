@@ -4,7 +4,7 @@
 // Named Constants (single source of truth for all thresholds/targets)
 // -------------------------------
 const CONSTANTS = {
-  CLOSING_COSTS:    15000,          // flat worst-case closing cost estimate
+  CLOSING_COSTS:    0,              // fallback only; new scenarios default to 2.5% of property value
   MISC_RATE_ANNUAL: 0.01,           // 1% annual misc for operating expenses
   COC_BANDS:        [0.07, 0.05, 0.03],
   CAP_RATE_BANDS:   [0.12, 0.08, 0.05],
@@ -123,78 +123,19 @@ function badgeClass(b) {
 }
 
 // -------------------------------
-// Address Parsing & Duplicate Check
+// Address Duplicate Check
 // -------------------------------
 function normalizeWhitespace(s) { return (s || "").replace(/\s+/g, " ").trim(); }
 
-/**
- * parseAddress:
- * Attempts to extract { line1, line2, city, state, zip, country } from a comma-separated string.
- * Heuristics used:
- *  - If the 2nd part looks like a unit ("Apt", "Suite", "Ste", "Unit", "#"), treat as line2, otherwise it's likely part of locality.
- *  - Country recognized as the last segment when it doesn't look like "STATE ZIP".
- *  - City/State/ZIP inferred from the tail segments. Country omitted if "United States".
- */
-function parseAddress(raw) {
-  const s = normalizeWhitespace(raw);
-  if (!s) return { raw: "", line1: "", line2: "", city: "", state: "", zip: "", country: "", normalized: "" };
-
-  const parts = s.split(",").map(p => p.trim()).filter(Boolean);
-  let line1 = "", line2 = "", city = "", state = "", zip = "", country = "";
-
-  if (parts.length === 1) {
-    line1 = parts[0];
-  } else {
-    line1 = parts[0];
-
-    // Candidate trailing segments
-    const last = parts[parts.length - 1];
-    const last2 = parts[parts.length - 2] || "";
-
-    // If last is a ZIP (##### or #####-####), then last2 should contain the state, and city is before that.
-    if (/^\d{5}(?:-\d{4})?$/.test(last)) {
-      const stz = last2.split(/\s+/);
-      state = stz[0] || "";
-      zip = last || "";
-      city = parts[parts.length - 3] || "";
-      // If second piece looks like a unit designator, capture as line2
-      if (parts[1] && /(?:apt|suite|ste|unit|#)/i.test(parts[1])) line2 = parts[1];
-    } else {
-      // Otherwise, treat last as country, and last2 as "STATE ZIP"
-      country = last;
-      const stz = last2.split(/\s+/);
-      state = stz[0] || "";
-      zip = stz[1] || "";
-      city = parts[parts.length - 3] || "";
-      if (parts[1] && /(?:apt|suite|ste|unit|#)/i.test(parts[1])) line2 = parts[1];
-    }
-
-    // Fallback: handle "line1, city state zip" (2 segments only)
-    if (!city && parts.length === 2) {
-      const rest = parts[1].split(/\s+/);
-      city = rest.slice(0, -2).join(" ") || "";
-      state = rest.slice(-2, -1)[0] || "";
-      zip = rest.slice(-1)[0] || "";
-    }
-  }
-
-  // Omit "United States" (implied default); normalize other country strings
-  if (/^(us|usa|united states|united states of america)$/i.test(country)) country = "";
-
-  const normalized = (line1 + "|" + line2 + "|" + city + "|" + state + "|" + zip + "|" + country).toLowerCase();
-  return { raw: s, line1, line2, city, state, zip, country, normalized };
-}
-
-function findDuplicateByAddress(addressRaw) {
+function findDuplicateByAddress({ street, zip }) {
   const cat = getCatalog();
-  const target = parseAddress(addressRaw);
-  if (!target.normalized) return null;
-  const hit = (cat.properties || []).find(p => {
-    const pa = parseAddress(p?.source?.address || "");
-    // Require same line1 and same normalized string for a strict duplicate
-    return pa.line1.toLowerCase() === target.line1.toLowerCase() &&
-      pa.normalized === target.normalized;
-  });
+  if (!street || !zip) return null;
+  const normStreet = normalizeWhitespace(street).toLowerCase();
+  const normZip    = normalizeWhitespace(zip).toLowerCase();
+  const hit = (cat.properties || []).find(p =>
+    normalizeWhitespace(p?.source?.street || "").toLowerCase() === normStreet &&
+    normalizeWhitespace(p?.source?.zip    || "").toLowerCase() === normZip
+  );
   return hit || null;
 }
 
@@ -250,8 +191,9 @@ function computeAll(input) {
   const rentPerUnitMonthly = toNumber(input.rentPerUnitMonthly);
 
   const downPayment = propertyValue * percentDown;
-  const closingCosts = CONSTANTS.CLOSING_COSTS;
-  const miscMonthly = (propertyValue * CONSTANTS.MISC_RATE_ANNUAL) / 12;
+  const closingCosts = toNumber(input.closingCosts ?? CONSTANTS.CLOSING_COSTS);
+  const miscRate = toNumber(input.miscRateAnnual ?? CONSTANTS.MISC_RATE_ANNUAL);
+  const miscMonthly = (propertyValue * miscRate) / 12;
 
   const loanAmount = Math.max(0, propertyValue - downPayment);
   const r = rateApr / 12;
@@ -280,10 +222,12 @@ function computeAll(input) {
   // DSCR uses 80% of NOI — conservative lending standard (PAT 2.0: NOI_80% column)
   const dscr = (mortgageMonthly > 0) ? ((noiAnnual * 0.80) / (mortgageMonthly * 12)) : NaN;
 
-  // DSCR target price using 85% of NOI
+  const incomeEfficiency = (toNumber(input.incomeEfficiencyPct) || 80) / 100;
+
+  // DSCR target price using income efficiency % of NOI (default 80%)
   function priceForDSCR(target) {
     if (target <= 0) return NaN;
-    const ADS = (0.85 * noiAnnual) / target;   // Annual Debt Service target
+    const ADS = (incomeEfficiency * noiAnnual) / target;   // Annual Debt Service target
     const PMT = ADS / 12;                      // Monthly payment target
     let loanTarget = 0;
     if (r === 0) {
@@ -356,7 +300,7 @@ function openPrintableCatalogue(props) {
     const dscr = isFinite(p.computed?.dscr) ? p.computed.dscr.toFixed(2) : "N/A";
     // Calculate Total Initial Investment
     const downPayment = Number(p.inputs.propertyValue) * (Number(p.inputs.percentDownPct) / 100);
-    const closingCosts = CONSTANTS.CLOSING_COSTS;
+    const closingCosts = Number(p.inputs.closingCosts) || 0;
     const improvementCost = Number(p.inputs.estImprovementCost) || 0;
     const totalInitial = downPayment + closingCosts + improvementCost;
     const grossRentMonthly = isFinite(p.computed?.grossRentMonthly) ? formatMoney(p.computed.grossRentMonthly) : "N/A";

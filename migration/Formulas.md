@@ -83,9 +83,11 @@ NOI 80% (AK) = NOI Annual (AG) × 80% = AG × 0.8
 
 DSCR (AM) = NOI 80% (AK) / Annual Mortgage Payments (AL) = (AG × 0.8) / (N × 12)
 
-Value for DSCR = 1.5 (AO): Uses the formula PRODUCT(1/L, AK/1.5, M) + I, where ADS = (0.85 × NOI Annual) / 1.5
+Value for DSCR = 1.5 (AO): Uses the formula PRODUCT(1/L, AK/1.5, M) + I, where ADS = (incomeEfficiency × NOI Annual) / 1.5
 
-Value for DSCR = 1.2 (AP): Uses the formula PRODUCT(1/L, AK/1.2, M) + I, where ADS = (0.85 × NOI Annual) / 1.2
+Value for DSCR = 1.2 (AP): Uses the formula PRODUCT(1/L, AK/1.2, M) + I, where ADS = (incomeEfficiency × NOI Annual) / 1.2
+
+Note: incomeEfficiency defaults to 80% (stored per-property in Supabase as `properties.income_efficiency`). PAT 2.0 used 85% — PAT 3.0 corrects this to 80% to match the DSCR calculation standard (same 80% as line 82).
 
 ### Step 8: Suggested Rent Per Unit (for Target Returns)
 
@@ -105,13 +107,18 @@ Constants (Defined in PAT 2.0, Must Be Replicated):
 
 ```javascript
 CONSTANTS = {
-  CLOSING_COSTS: 15000,
+  CLOSING_COSTS: 0,              // fallback only — new scenarios default to 2.5% of property value (auto-calculated)
+  INCOME_EFFICIENCY: 80,         // % of NOI used for DSCR guidance; stored per-property in properties.income_efficiency
   MISC_RATE_ANNUAL: 0.01,
   DSCR_TARGETS: [1.5, 1.2],
   COC_BANDS: [0.07, 0.05, 0.03],
   CAP_RATE_BANDS: [0.12, 0.08, 0.05]
 }
 ```
+
+PAT 3.0 changes from PAT 2.0:
+- `CLOSING_COSTS` removed as a fixed constant ($15,000). New scenarios auto-calculate as 2.5% of property value. Users can override; the override is stored in `inputs.closingCosts`.
+- `INCOME_EFFICIENCY` added (default 80%). Stored per-property in Supabase `properties.income_efficiency`. PAT 2.0 used 85% — PAT 3.0 corrects this to 80% to match the DSCR lending standard.
 
 Tax Handling (Critical Difference: PAT 2.0 vs PAT 3.0):
 

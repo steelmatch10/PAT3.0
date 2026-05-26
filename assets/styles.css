@@ -318,6 +318,12 @@ h2 {
 }
 
 
+/* Required-field highlight when hovering a KPI pill — label text only, no border */
+.highlight-required label {
+  color: #e8d5b0;
+  transition: color 0.15s;
+}
+
 .kpi,
 .kpi-badges .badge {
   padding: 10px 12px;

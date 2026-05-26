@@ -282,8 +282,24 @@
     <div class="modal-box">
       <h3>Add Property</h3>
       <div class="form-group">
-        <label>Address</label>
-        <input type="text" id="newAddress" placeholder="97 Throop Avenue, Newark, NJ" />
+        <label>Street Address *</label>
+        <input type="text" id="newStreet" placeholder="97 Throop Avenue" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group">
+          <label>City</label>
+          <input type="text" id="newCity" placeholder="Newark" />
+        </div>
+        <div style="display:grid;grid-template-columns:3.5rem 1fr;gap:6px;align-items:end;">
+          <div class="form-group">
+            <label>State</label>
+            <input type="text" id="newState" placeholder="NJ" maxlength="2" />
+          </div>
+          <div class="form-group">
+            <label>ZIP</label>
+            <input type="text" id="newZip" placeholder="07103" maxlength="10" />
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label>Zillow Link (optional)</label>
@@ -355,34 +371,43 @@
 
         // Wire GRASP card to open a property picker (just go to GRASP landing for now)
         // New Property modal
-        const modal     = document.getElementById('newPropModal');
-        const addrInput = document.getElementById('newAddress');
-        const linkInput = document.getElementById('newZillowLink');
-        const errEl     = document.getElementById('newPropError');
-        const saveBtn   = document.getElementById('newPropSave');
+        const modal      = document.getElementById('newPropModal');
+        const streetInput = document.getElementById('newStreet');
+        const cityInput   = document.getElementById('newCity');
+        const stateInput  = document.getElementById('newState');
+        const zipInput    = document.getElementById('newZip');
+        const linkInput   = document.getElementById('newZillowLink');
+        const errEl       = document.getElementById('newPropError');
+        const saveBtn     = document.getElementById('newPropSave');
 
         newPropBtn.addEventListener('click', () => {
-          addrInput.value = '';
-          linkInput.value = '';
+          streetInput.value = '';
+          cityInput.value   = '';
+          stateInput.value  = '';
+          zipInput.value    = '';
+          linkInput.value   = '';
           errEl.style.display = 'none';
           modal.classList.add('visible');
-          addrInput.focus();
+          streetInput.focus();
         });
         document.getElementById('newPropCancel').addEventListener('click', () => modal.classList.remove('visible'));
         modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('visible'); });
 
         saveBtn.addEventListener('click', async () => {
-          const address = addrInput.value.trim();
-          if (!address) { showErr('Address is required.'); return; }
+          const street = streetInput.value.trim();
+          if (!street) { showErr('Street address is required.'); return; }
           saveBtn.disabled = true;
           saveBtn.textContent = 'Creating…';
           errEl.style.display = 'none';
           try {
-            const { id } = await createProperty(address, linkInput.value.trim());
+            const { id } = await createProperty(
+              { street, city: cityInput.value.trim(), state: stateInput.value.trim(), zip: zipInput.value.trim() },
+              linkInput.value.trim()
+            );
             window.location.href = `GRASP.html?propertyId=${id}&newScenario=1`;
           } catch (err) {
-            const msg = err.message?.includes('address_unique')
-              ? 'A property with this address already exists.'
+            const msg = err.message?.includes('properties_street_zip_key') || err.message?.includes('address_unique')
+              ? 'A property at this street + ZIP already exists.'
               : (err.message || 'Failed to create property.');
             showErr(msg);
             saveBtn.disabled = false;
@@ -450,7 +475,7 @@
       function propCardHtml(p, showBadge) {
         return `
           <div class="prop-card" data-id="${p.id}" data-module="${p.latest_module || 'GRASP'}">
-            <h3>${escapeHtml(p.address)}${founder && p.pinned ? ' <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:5px;background:rgba(110,168,254,.15);color:var(--brand);vertical-align:middle;">Pinned</span>' : ''}</h3>
+            <h3>${escapeHtml(formatAddress(p))}${founder && p.pinned ? ' <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:5px;background:rgba(110,168,254,.15);color:var(--brand);vertical-align:middle;">Pinned</span>' : ''}</h3>
             <div class="prop-meta">
               <span>${p.scenario_count} scenario${p.scenario_count !== 1 ? 's' : ''}</span>
               <span>Updated ${formatDate(p.updated_at || p.created_at)}</span>

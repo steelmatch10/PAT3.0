@@ -9,6 +9,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const founder = member?.global_role === 'founder';
   const investor = member?.global_role === 'investor';
 
+  // Recompute all GRASP scenarios in the background so stored values are fresh.
+  // Fire-and-forget — does not block page render or loadData().
+  recomputeAllScenarios().catch(err => console.warn('recomputeAllScenarios:', err));
+
   // For investors, fetch their approved property IDs so those float to the top
   let approvedIds = new Set();
   if (investor) {
@@ -43,7 +47,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       .from('properties')
       .select(`
         id,
-        address,
+        street,
+        city,
+        state,
+        zip,
         zillow_link,
         created_at,
         updated_at,
@@ -93,7 +100,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     const val  = parseFloat(s.inputs?.propertyValue) || 0;
     const down = val * ((parseFloat(s.inputs?.percentDownPct) || 0) / 100);
-    return down + CONSTANTS.CLOSING_COSTS + (parseFloat(s.inputs?.estImprovementCost) || 0);
+    const closing = parseFloat(s.inputs?.closingCosts) || 0;
+    return down + closing + (parseFloat(s.inputs?.estImprovementCost) || 0);
   }
 
   function passesKpiFilter(p) {
@@ -118,7 +126,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const mod = moduleFilter.value;
 
     let props = allProperties.filter(p => {
-      const addressMatch = !q || p.address.toLowerCase().includes(q);
+      const addrFull = formatAddress(p).toLowerCase();
+      const addressMatch = !q || addrFull.includes(q);
       const moduleMatch  = !mod || p.scenarios.length === 0 || p.scenarios.some(s => s.module === mod);
       const kpiMatch     = currentView === 'table' ? passesKpiFilter(p) : true;
       return addressMatch && moduleMatch && kpiMatch;
@@ -131,7 +140,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const pinDiff = (isElevated(b) ? 1 : 0) - (isElevated(a) ? 1 : 0);
       if (pinDiff !== 0) return pinDiff;
       switch (sortCol) {
-        case 'address':    return dir * a.address.localeCompare(b.address);
+        case 'address':    return dir * (a.street || '').localeCompare(b.street || '');
         case 'scenarios':  return dir * (a.scenarios.length - b.scenarios.length);
         case 'investment': return dir * (bestInvestment(a) - bestInvestment(b));
         case 'updated':
@@ -172,7 +181,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     const val  = parseFloat(inp.propertyValue) || 0;
     const down = val * ((parseFloat(inp.percentDownPct) || 0) / 100);
-    return down + CONSTANTS.CLOSING_COSTS + (parseFloat(inp.estImprovementCost) || 0);
+    const closing = parseFloat(inp.closingCosts) || 0;
+    return down + closing + (parseFloat(inp.estImprovementCost) || 0);
   }
 
   function kpiBadgesHtml(scenario) {
@@ -240,10 +250,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const module     = best?.module ?? null;
       const targetPage = module === 'FRAT' ? 'FRAT.html' : 'GRASP.html';
 
-      // Split "97 Throop Ave, New Brunswick, NJ 08901" into street / locality
-      const commaIdx = p.address.indexOf(',');
-      const street   = commaIdx !== -1 ? p.address.slice(0, commaIdx) : p.address;
-      const locality = commaIdx !== -1 ? p.address.slice(commaIdx + 1).trim() : '';
+      const street   = p.street || '';
+      const locality = [p.city, p.state && p.zip ? `${p.state} ${p.zip}` : (p.state || p.zip)].filter(Boolean).join(', ');
 
       const scenLabel = scenCount === 0
         ? 'No scenarios yet'
@@ -288,9 +296,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const module     = best?.module ?? null;
       const targetPage = module === 'FRAT' ? 'FRAT.html' : 'GRASP.html';
 
-      const commaIdx = p.address.indexOf(',');
-      const street   = commaIdx !== -1 ? p.address.slice(0, commaIdx) : p.address;
-      const locality = commaIdx !== -1 ? p.address.slice(commaIdx + 1).trim() : '';
+      const street   = p.street || '';
+      const locality = [p.city, p.state && p.zip ? `${p.state} ${p.zip}` : (p.state || p.zip)].filter(Boolean).join(', ');
 
       // KPI cells
       let kpiHtml = '<span style="color:var(--muted);font-style:italic;font-size:12px;">No scenarios</span>';
@@ -322,8 +329,9 @@ document.addEventListener("DOMContentLoaded", async () => {
           </div>`;
           const val   = parseFloat(best.inputs?.propertyValue) || 0;
           const down  = val * ((parseFloat(best.inputs?.percentDownPct) || 0) / 100);
+          const closing = parseFloat(best.inputs?.closingCosts) || 0;
           const improv = parseFloat(best.inputs?.estImprovementCost) || 0;
-          investHtml = formatMoney(down + CONSTANTS.CLOSING_COSTS + improv);
+          investHtml = formatMoney(down + closing + improv);
         }
       }
 
@@ -470,18 +478,112 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ── Export (founders only) ─────────────────────────────────────────────────
   const exportBtn    = document.getElementById('exportBtn');
   const exportSelect = document.getElementById('exportSelect');
+
+  function getSelectedIds() {
+    return [...document.querySelectorAll('.cat-select:checked')].map(cb => cb.dataset.id);
+  }
+
+  function updateExportBtnLabel() {
+    if (!exportBtn) return;
+    const selectedIds = getSelectedIds();
+    exportBtn.textContent = selectedIds.length > 0 ? 'Export Selected' : 'Export All';
+  }
+
+  // Delegate checkbox change events on the cards/table containers
+  ['cards', 'tableView'].forEach(containerId => {
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.addEventListener('change', (e) => {
+        if (e.target.classList.contains('cat-select')) updateExportBtnLabel();
+      });
+    }
+  });
+
+  function generateCsv(props) {
+    const CSV_COLS = [
+      'address', 'scenario_name', 'scenario_description', 'module',
+      'propertyValue', 'percentDownPct', 'rateAprPct', 'loanLengthYears',
+      'estImprovementCost', 'closingCosts', 'bedroomsOrUnits', 'rentPerUnitMonthly',
+      'taxesMonthly', 'taxesAnnual', 'insuranceMonthly', 'hoaMonthly',
+      'coC', 'capRate', 'dscr',
+      'suggestedRentCoC7pct', 'suggestedRentCoC5pct', 'suggestedRentCoC3pct',
+      'suggestedRentCap12pct', 'suggestedRentCap8pct', 'suggestedRentCap5pct',
+    ];
+    const escCsv = (v) => {
+      if (v == null) return '';
+      const s = String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = [CSV_COLS.join(',')];
+    for (const p of props) {
+      const scenarios = p.scenarios || [];
+      if (scenarios.length === 0) {
+        rows.push(CSV_COLS.map(col => col === 'address' ? escCsv(formatAddress(p)) : '').join(','));
+        continue;
+      }
+      for (const s of scenarios) {
+        const inp = s.inputs || {};
+        const comp = s.computed || {};
+        const sugRent = comp.suggestedGrossRent || comp.suggestedRentPerUnit || {};
+        const row = CSV_COLS.map(col => {
+          switch (col) {
+            case 'address':             return escCsv(formatAddress(p));
+            case 'scenario_name':       return escCsv(s.scenario_name);
+            case 'scenario_description': return escCsv(s.scenario_description);
+            case 'module':              return escCsv(s.module);
+            case 'propertyValue':       return escCsv(inp.propertyValue);
+            case 'percentDownPct':      return escCsv(inp.percentDownPct != null ? inp.percentDownPct / 100 : '');
+            case 'rateAprPct':          return escCsv(inp.rateAprPct != null ? inp.rateAprPct / 100 : '');
+            case 'loanLengthYears':     return escCsv(inp.loanLengthYears);
+            case 'estImprovementCost':  return escCsv(inp.estImprovementCost);
+            case 'closingCosts':        return escCsv(inp.closingCosts);
+            case 'bedroomsOrUnits':     return escCsv(s.bedrooms_or_units);
+            case 'rentPerUnitMonthly':  return escCsv(inp.rentPerUnitMonthly);
+            case 'taxesMonthly':        return escCsv(inp.taxesAnnual != null ? (inp.taxesAnnual / 12).toFixed(2) : '');
+            case 'taxesAnnual':         return escCsv(inp.taxesAnnual);
+            case 'insuranceMonthly':    return escCsv(inp.insuranceMonthly);
+            case 'hoaMonthly':          return escCsv(inp.hoaMonthly);
+            case 'coC':                 return escCsv(comp.cashOnCash != null ? comp.cashOnCash.toFixed(4) : '');
+            case 'capRate':             return escCsv(comp.capRate != null ? comp.capRate.toFixed(4) : '');
+            case 'dscr':                return escCsv(comp.dscr != null ? comp.dscr.toFixed(4) : '');
+            case 'suggestedRentCoC7pct':  return escCsv(typeof sugRent === 'object' ? (sugRent.coc?.pct7 ?? '') : '');
+            case 'suggestedRentCoC5pct':  return escCsv(typeof sugRent === 'object' ? (sugRent.coc?.pct5 ?? '') : '');
+            case 'suggestedRentCoC3pct':  return escCsv(typeof sugRent === 'object' ? (sugRent.coc?.pct3 ?? '') : '');
+            case 'suggestedRentCap12pct': return escCsv(typeof sugRent === 'object' ? (sugRent.cap?.pct12 ?? '') : '');
+            case 'suggestedRentCap8pct':  return escCsv(typeof sugRent === 'object' ? (sugRent.cap?.pct8 ?? '') : '');
+            case 'suggestedRentCap5pct':  return escCsv(typeof sugRent === 'object' ? (sugRent.cap?.pct5 ?? '') : '');
+            default: return '';
+          }
+        });
+        rows.push(row.join(','));
+      }
+    }
+    return rows.join('\n');
+  }
+
   if (exportBtn) {
     exportBtn.addEventListener('click', () => {
-      const props = filteredProperties();
+      const selectedIds = getSelectedIds();
+      let props = filteredProperties();
+      if (selectedIds.length > 0) {
+        props = props.filter(p => selectedIds.includes(p.id));
+      }
+
       if (exportSelect.value === 'json') {
         const blob = new Blob([JSON.stringify({ properties: props }, null, 2)], { type: 'application/json' });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
-        a.href = url; a.download = 'pat_catalogue.json'; a.click();
+        a.href = url; a.download = 'pat_catalogue_export.json'; a.click();
         URL.revokeObjectURL(url);
-        showToast('Catalogue exported as JSON', 'success');
-      } else {
-        showToast('PDF export not yet available in Supabase mode.', 'info');
+        showToast(`Exported ${props.length} propert${props.length === 1 ? 'y' : 'ies'} as JSON`, 'success');
+      } else if (exportSelect.value === 'csv') {
+        const csv  = generateCsv(props);
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = 'pat_catalogue_export.csv'; a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Exported ${props.length} propert${props.length === 1 ? 'y' : 'ies'} as CSV`, 'success');
       }
     });
   }
