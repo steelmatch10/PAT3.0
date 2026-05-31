@@ -30,3 +30,17 @@ INTEGRATION_QUICK_REFERENCE.md
 INTEGRATION_STATUS.md
 PHASE3_COMPLETION_REPORT.md
 PHASE3_TESTING_COMPLETE.md
+
+# Scratch & temporary working files (Claude artifacts)
+scratch*.txt
+temp*.txt
+debug*.txt
+plan*.txt
+investigation*.txt
+exploring*.txt
+mapping*.txt
+analysis*.txt
+*_scratch.txt
+*_temp.txt
+*_debug.txt
+*.txt
