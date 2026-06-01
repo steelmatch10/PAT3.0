@@ -123,6 +123,13 @@ Catalogue.html   → saved properties
 - Write rules for yourself that prevent the same mistake
 - Ruthlessly iterate on these lessons until mistake rate drops
 - Review lessons at session start for relevant project context
+- **After every task:** scan the project root for empty or stray text files and delete them — keep the workspace clean
+
+### 8. GRASP/FRAT Parity Rule
+- **GRASP and FRAT are both part of PAT.** Any bug fix, formula change, or UX improvement requested for one module must be evaluated for applicability to the other — even if the user only mentions one.
+- They share `supabase-client.js` and `app.js` but have independent JS files (`grasp.js`, `frat.js`) and HTML files.
+- Goal: migrate to `computeAllGRASP()` and `computeAllFRAT()` as separate functions in `app.js`, each with their own independent calculation flow, so changes to one don't silently break the other.
+- Until that migration happens: whenever touching a calculation in `grasp.js`, explicitly check whether `frat.js` has the equivalent and whether it needs the same change.
 
 ### 4. Verification Before Done
 - Never mark a task complete without proving it works

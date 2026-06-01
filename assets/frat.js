@@ -30,6 +30,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   const els = {
+    fullAddress:  document.getElementById("fullAddress"),
+    addressHint:  document.getElementById("addressHint"),
     addrStreet: document.getElementById("addr-street"),
     addrCity:   document.getElementById("addr-city"),
     addrState:  document.getElementById("addr-state"),
@@ -226,6 +228,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.addrCity.value        = currentProperty?.city        ?? "";
     els.addrState.value       = currentProperty?.state       ?? "";
     els.addrZip.value         = currentProperty?.zip         ?? "";
+    if (els.fullAddress) {
+      els.fullAddress.value = assembleAddress({ street: currentProperty?.street ?? "", city: currentProperty?.city ?? "", state: currentProperty?.state ?? "", zip: currentProperty?.zip ?? "" });
+      if (els.addressHint) els.addressHint.style.display = "none";
+    }
     els.link.value            = currentProperty?.zillow_link ?? "";
     els.propertyValue.value   = inp.propertyValue  ?? "";
     els.percentDownPct.value  = inp.percentDownPct ?? "";
@@ -273,6 +279,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.addrCity.value        = defaults.city   ?? "";
     els.addrState.value       = defaults.state  ?? "";
     els.addrZip.value         = defaults.zip    ?? "";
+    if (els.fullAddress) {
+      els.fullAddress.value = assembleAddress({ street: defaults.street ?? "", city: defaults.city ?? "", state: defaults.state ?? "", zip: defaults.zip ?? "" });
+      if (els.addressHint) els.addressHint.style.display = "none";
+    }
     els.link.value            = defaults.link   ?? "";
     els.propertyValue.value   = "";
     els.percentDownPct.value  = "";
@@ -441,11 +451,46 @@ document.addEventListener("DOMContentLoaded", async () => {
       : 'Enter property value and down % to calculate';
   }
 
+  function parseFullAddress(value) {
+    const parts = value.split(',');
+    if (parts.length < 2) return null;
+    const street = parts[0].trim();
+    const lastTokens = parts[parts.length - 1].trim().split(/\s+/);
+    const zip   = /^\d{5}(-\d{4})?$/.test(lastTokens[lastTokens.length - 1]) ? lastTokens[lastTokens.length - 1] : '';
+    const state = /^[A-Za-z]{2}$/.test(lastTokens[lastTokens.length - (zip ? 2 : 1)])
+      ? lastTokens[lastTokens.length - (zip ? 2 : 1)].toUpperCase()
+      : '';
+    const city  = parts.slice(1, -1).join(',').trim();
+    return { street, city, state, zip };
+  }
+
+  function assembleAddress({ street, city, state, zip }) {
+    const parts = [street, city, [state, zip].filter(Boolean).join(' ')].filter(Boolean);
+    return parts.join(', ');
+  }
+
+  function applyParsedAddress(parsed) {
+    if (!parsed) return;
+    if (parsed.street) els.addrStreet.value = parsed.street;
+    if (parsed.city)   els.addrCity.value   = parsed.city;
+    if (parsed.state)  els.addrState.value  = parsed.state;
+    if (parsed.zip)    els.addrZip.value    = parsed.zip;
+  }
+
   function setAddressReadonly(locked) {
-    [els.addrStreet, els.addrCity, els.addrState, els.addrZip].forEach(el => {
-      el.readOnly = locked;
-      el.style.opacity = locked ? "0.7" : "";
-      el.style.cursor  = locked ? "default" : "";
+    if (els.fullAddress) {
+      els.fullAddress.readOnly      = locked;
+      els.fullAddress.style.opacity = locked ? "0.7" : "";
+      els.fullAddress.style.cursor  = locked ? "default" : "";
+    }
+  }
+
+  if (els.fullAddress) {
+    els.fullAddress.addEventListener("input", () => {
+      const val = els.fullAddress.value;
+      const hasComma = val.includes(',');
+      if (els.addressHint) els.addressHint.style.display = (val.length > 3 && !hasComma) ? "block" : "none";
+      applyParsedAddress(parseFullAddress(val));
     });
   }
 
@@ -575,6 +620,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       if (currentScenarioId) {
         await updateScenario(currentScenarioId, scenarioData);
+        if (currentPropertyId) {
+          await updatePropertyZillowLink(currentPropertyId, (els.link.value || "").trim() || null);
+          if (currentProperty) currentProperty.zillow_link = (els.link.value || "").trim() || null;
+        }
         showToast("Scenario saved.", "success");
         lastSavedSnapshot = JSON.stringify(collectForm());
         isDirty = false;

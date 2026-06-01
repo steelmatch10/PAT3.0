@@ -207,12 +207,14 @@ function computeAll(input) {
     mortgageMonthly = denom !== 0 ? loanAmount * r / denom : 0;
   }
 
+  const propertyManagementCut = Math.min(1, Math.max(0, toNumber(input.propertyManagementCutPct ?? 10) / 100));
+
   const grossRentMonthly = units * rentPerUnitMonthly;
   const operatingExpensesMonthly = taxesMonthly + insuranceMonthly + hoaMonthly + miscMonthly;
   const ownershipCostMonthly = operatingExpensesMonthly + mortgageMonthly;
 
-  // 10% vacancy factor applied to gross rent (mirrors PAT 2.0 workbook)
-  const effectiveRentMonthly = grossRentMonthly * 0.90;
+  // Property management cut applied to gross rent
+  const effectiveRentMonthly = grossRentMonthly * (1 - propertyManagementCut);
   const noiAnnual = (effectiveRentMonthly - operatingExpensesMonthly) * 12;
   const annualCashFlow = (effectiveRentMonthly - ownershipCostMonthly) * 12;
   const totalInitialInvestment = downPayment + estImprovementCost + closingCosts;
@@ -245,15 +247,15 @@ function computeAll(input) {
 
   // Suggested rent / unit to hit targets
   function rentPerUnitForCoC(targetCoC) {
-    if (units <= 0) return NaN;
+    if (units <= 0 || propertyManagementCut >= 1) return NaN;
     const numer = targetCoC * totalInitialInvestment + 12 * (operatingExpensesMonthly + mortgageMonthly);
-    const denom = 12 * units;
+    const denom = 12 * units * (1 - propertyManagementCut);
     return denom > 0 ? numer / denom : NaN;
   }
   function rentPerUnitForCap(targetCap) {
-    if (units <= 0) return NaN;
+    if (units <= 0 || propertyManagementCut >= 1) return NaN;
     const numer = targetCap * propertyValue + 12 * operatingExpensesMonthly;
-    const denom = 12 * units;
+    const denom = 12 * units * (1 - propertyManagementCut);
     return denom > 0 ? numer / denom : NaN;
   }
 

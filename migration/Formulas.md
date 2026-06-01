@@ -57,13 +57,13 @@ Total Realistic Rent (AH) = Bedrooms/Units (Z) × Rent per Unit (AE) = Z × AE
 
 Gross Rent Monthly = Total Realistic Rent (AH) = AH
 
-**CRITICAL — Vacancy Factor:** PAT 2.0 applies a 10% vacancy discount to gross rent before computing NOI, Cap Rate, AND Annual Cash Flow. All income-based metrics use effective rent.
+**PAT 3.0 — Property Management Cut replaces Vacancy Factor:** PAT 2.0 used a fixed 10% vacancy discount. PAT 3.0 replaces this with a per-property `property_management_cut` field (stored in `properties.property_management_cut`, default 10%). Vacancy factor as a separate concept no longer exists — the PM cut captures the same income reduction.
 
-Effective Rent Monthly = Gross Rent (AH) × 0.90
+Effective Rent Monthly = Gross Rent (AH) × (1 - propertyManagementCut)
 
-NOI Annual (AG) = (Effective Rent - Recurring Payments (S)) × 12 = (AH × 0.9 - S) × 12
+NOI Annual (AG) = (Effective Rent - Recurring Payments (S)) × 12
 
-Annual Cash Flow (AI) = (Effective Rent - Ownership Cost (Monthly)) × 12 = (AH × 0.9 - S - N) × 12
+Annual Cash Flow (AI) = (Effective Rent - Ownership Cost (Monthly)) × 12 = (Effective Rent - S - N) × 12
 
 Annual Mortgage Payments (AL) = Mortgage Payment (N) × 12 = N × 12
 
