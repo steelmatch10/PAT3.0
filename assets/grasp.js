@@ -27,6 +27,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const els = {
     scenarioName:        document.getElementById("scenarioName"),
     scenarioDescription: document.getElementById("scenarioDescription"),
+    fullAddress:         document.getElementById("fullAddress"),
+    addressHint:         document.getElementById("addressHint"),
     addrStreet:          document.getElementById("addr-street"),
     addrCity:            document.getElementById("addr-city"),
     addrState:           document.getElementById("addr-state"),
@@ -77,6 +79,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Income Efficiency elements — declared here to avoid temporal dead zone errors
   const ieInput = document.getElementById("incomeEfficiency");
   const ieLabel = document.getElementById("ieLabel");
+
+  // Property Management Cut elements
+  const pmInput = document.getElementById("propertyManagementCut");
+  const pmLabel = document.getElementById("pmLabel");
 
   // ── Access check — investor read-only enforcement ────────────────────────────
   let readOnly = false;
@@ -202,6 +208,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (ieLabel) ieLabel.textContent = ieVal;
     }
 
+    // Load per-property Property Management Cut from Supabase (already in currentProperty)
+    if (pmInput) {
+      const pmVal = String(currentProperty?.property_management_cut ?? 10);
+      pmInput.value = pmVal;
+      if (pmLabel) pmLabel.textContent = pmVal;
+    }
+
     if (allScenarios.length > 0 && !newScenario) {
       // Load the most recent scenario
       loadScenarioIntoForm(allScenarios[0]);
@@ -305,6 +318,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       const val = ieInput.value || "80";
       ieLabel.textContent = val;
       if (currentPropertyId) updatePropertyIncomeEfficiency(currentPropertyId, parseInt(val, 10) || 80);
+      triggerCompute();
+    });
+  }
+
+  // Keep PM label in sync and persist per-property
+  if (pmInput && pmLabel) {
+    pmInput.addEventListener("input", () => {
+      const val = pmInput.value || "10";
+      pmLabel.textContent = val;
+      if (currentPropertyId) updatePropertyManagementCut(currentPropertyId, parseFloat(val) || 10);
+      triggerCompute();
     });
   }
 
@@ -345,19 +369,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Compute KPIs (computeAll expects taxesMonthly)
     const kpiResult = computeAll({
-      propertyValue:      inputs.propertyValue,
-      percentDownPct:     inputs.percentDownPct,
-      rateAprPct:         inputs.rateAprPct,
-      loanLengthYears:    inputs.loanLengthYears,
-      taxesMonthly:       inputs.taxesAnnual / 12,
-      insuranceMonthly:   inputs.insuranceMonthly,
-      hoaMonthly:         inputs.hoaMonthly,
-      estImprovementCost: inputs.estImprovementCost,
-      closingCosts:       inputs.closingCosts,
-      miscRateAnnual:     inputs.miscRateAnnual,
-      incomeEfficiencyPct: normalized.incomeEfficiencyPct,
-      bedroomsOrUnits:    normalized.bedroomsOrUnits,
-      rentPerUnitMonthly: normalized.rentPerUnitMonthly,
+      propertyValue:           inputs.propertyValue,
+      percentDownPct:          inputs.percentDownPct,
+      rateAprPct:              inputs.rateAprPct,
+      loanLengthYears:         inputs.loanLengthYears,
+      taxesMonthly:            inputs.taxesAnnual / 12,
+      insuranceMonthly:        inputs.insuranceMonthly,
+      hoaMonthly:              inputs.hoaMonthly,
+      estImprovementCost:      inputs.estImprovementCost,
+      closingCosts:            inputs.closingCosts,
+      miscRateAnnual:          inputs.miscRateAnnual,
+      incomeEfficiencyPct:     normalized.incomeEfficiencyPct,
+      propertyManagementCutPct: normalized.propertyManagementCutPct,
+      bedroomsOrUnits:         normalized.bedroomsOrUnits,
+      rentPerUnitMonthly:      normalized.rentPerUnitMonthly,
     });
 
     // Rename suggestedRentPerUnit → suggestedGrossRent for v2 schema
@@ -390,6 +415,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       if (currentScenarioId) {
         await updateScenario(currentScenarioId, scenarioData);
+        if (currentPropertyId) {
+          await updatePropertyZillowLink(currentPropertyId, normalized.link.trim() || null);
+          if (currentProperty) currentProperty.zillow_link = normalized.link.trim() || null;
+        }
         showToast("Scenario updated.", "success");
       } else {
         if (!currentPropertyId) {
@@ -433,11 +462,48 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ── Form helpers ──────────────────────────────────────────────────────────────
 
+  function parseFullAddress(value) {
+    const parts = value.split(',');
+    if (parts.length < 2) return null; // not enough structure to parse
+    const street = parts[0].trim();
+    const lastTokens = parts[parts.length - 1].trim().split(/\s+/);
+    const zip   = /^\d{5}(-\d{4})?$/.test(lastTokens[lastTokens.length - 1]) ? lastTokens[lastTokens.length - 1] : '';
+    const state = /^[A-Za-z]{2}$/.test(lastTokens[lastTokens.length - (zip ? 2 : 1)])
+      ? lastTokens[lastTokens.length - (zip ? 2 : 1)].toUpperCase()
+      : '';
+    const city  = parts.slice(1, -1).join(',').trim();
+    return { street, city, state, zip };
+  }
+
+  function assembleAddress({ street, city, state, zip }) {
+    const parts = [street, city, [state, zip].filter(Boolean).join(' ')].filter(Boolean);
+    return parts.join(', ');
+  }
+
+  function applyParsedAddress(parsed) {
+    if (!parsed) return;
+    if (parsed.street) els.addrStreet.value = parsed.street;
+    if (parsed.city)   els.addrCity.value   = parsed.city;
+    if (parsed.state)  els.addrState.value  = parsed.state;
+    if (parsed.zip)    els.addrZip.value    = parsed.zip;
+  }
+
   function setAddressReadonly(locked) {
-    [els.addrStreet, els.addrCity, els.addrState, els.addrZip].forEach(el => {
-      el.readOnly = locked;
-      el.style.opacity = locked ? "0.7" : "";
-      el.style.cursor  = locked ? "default" : "";
+    if (els.fullAddress) {
+      els.fullAddress.readOnly  = locked;
+      els.fullAddress.style.opacity = locked ? "0.7" : "";
+      els.fullAddress.style.cursor  = locked ? "default" : "";
+    }
+  }
+
+  // Wire fullAddress input → parse → hidden fields + hint
+  if (els.fullAddress) {
+    els.fullAddress.addEventListener("input", () => {
+      const val = els.fullAddress.value;
+      const hasComma = val.includes(',');
+      if (els.addressHint) els.addressHint.style.display = (val.length > 3 && !hasComma) ? "block" : "none";
+      const parsed = parseFullAddress(val);
+      applyParsedAddress(parsed);
     });
   }
 
@@ -450,6 +516,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.addrCity.value            = defaults.city   ?? "";
     els.addrState.value           = defaults.state  ?? "";
     els.addrZip.value             = defaults.zip    ?? "";
+    if (els.fullAddress) {
+      els.fullAddress.value = assembleAddress({ street: defaults.street ?? "", city: defaults.city ?? "", state: defaults.state ?? "", zip: defaults.zip ?? "" });
+      if (els.addressHint) els.addressHint.style.display = "none";
+    }
     els.link.value                = defaults.link   ?? "";
     els.propertyValue.value       = "";
     els.percentDownPct.value      = "";
@@ -494,6 +564,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.addrCity.value            = currentProperty?.city        ?? "";
     els.addrState.value           = currentProperty?.state       ?? "";
     els.addrZip.value             = currentProperty?.zip         ?? "";
+    if (els.fullAddress) {
+      els.fullAddress.value = assembleAddress({ street: currentProperty?.street ?? "", city: currentProperty?.city ?? "", state: currentProperty?.state ?? "", zip: currentProperty?.zip ?? "" });
+      if (els.addressHint) els.addressHint.style.display = "none";
+    }
     els.link.value                = currentProperty?.zillow_link ?? "";
     els.propertyValue.value       = inp.propertyValue ?? "";
     els.percentDownPct.value      = inp.percentDownPct ?? "";
@@ -623,7 +697,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       rentPerUnitMonthly = round2(total / beds);
     }
 
-    const miscRateDecimal = (parseFloat(els.miscRateAnnual.value) || 1) / 100;
+    const rawMiscRate = parseFloat(els.miscRateAnnual.value);
+    const miscRateDecimal = (isNaN(rawMiscRate) ? 1 : rawMiscRate) / 100;
 
     return {
       scenarioName:        els.scenarioName.value || "",
@@ -640,7 +715,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       estImprovementCost:  parseFloat(els.estImprovementCost.value) || 0,
       closingCosts:                parseFloat(els.closingCosts.value) || 0,
       closingCostsIsAutoCalculated: els.closingCosts.dataset.autoCalc !== "false",
-      incomeEfficiencyPct:         parseFloat(document.getElementById("incomeEfficiency")?.value) || 80,
+      incomeEfficiencyPct:          parseFloat(document.getElementById("incomeEfficiency")?.value) || 80,
+      propertyManagementCutPct:     parseFloat(document.getElementById("propertyManagementCut")?.value) || 10,
       miscRateAnnual:      miscRateDecimal,
       taxesAnnual,
       insuranceMonthly,
@@ -655,18 +731,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   function triggerCompute() {
     const f = collectFormNormalized();
     const kpi = computeAll({
-      propertyValue:      f.propertyValue,
-      percentDownPct:     f.percentDownPct,
-      rateAprPct:         f.rateAprPct,
-      loanLengthYears:    f.loanLengthYears,
-      taxesMonthly:       f.taxesAnnual / 12,
-      insuranceMonthly:   f.insuranceMonthly,
-      hoaMonthly:         f.hoaMonthly,
-      estImprovementCost: f.estImprovementCost,
-      closingCosts:       f.closingCosts,
-      incomeEfficiencyPct: f.incomeEfficiencyPct,
-      bedroomsOrUnits:    f.bedroomsOrUnits,
-      rentPerUnitMonthly: f.rentPerUnitMonthly,
+      propertyValue:           f.propertyValue,
+      percentDownPct:          f.percentDownPct,
+      rateAprPct:              f.rateAprPct,
+      loanLengthYears:         f.loanLengthYears,
+      taxesMonthly:            f.taxesAnnual / 12,
+      insuranceMonthly:        f.insuranceMonthly,
+      hoaMonthly:              f.hoaMonthly,
+      estImprovementCost:      f.estImprovementCost,
+      closingCosts:            f.closingCosts,
+      miscRateAnnual:          f.miscRateAnnual,
+      incomeEfficiencyPct:     f.incomeEfficiencyPct,
+      propertyManagementCutPct: f.propertyManagementCutPct,
+      bedroomsOrUnits:         f.bedroomsOrUnits,
+      rentPerUnitMonthly:      f.rentPerUnitMonthly,
     });
 
     renderKPIs(kpi);

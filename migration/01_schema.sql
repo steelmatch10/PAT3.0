@@ -213,3 +213,6 @@ ALTER TABLE properties
 ALTER TABLE properties DROP CONSTRAINT IF EXISTS address_unique;
 ALTER TABLE properties ADD CONSTRAINT address_street_zip_unique UNIQUE (street, zip);
 ALTER TABLE properties DROP COLUMN IF EXISTS address;
+
+-- v2.3: Property management cut — percentage of gross rent taken by property manager (default 10%)
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS property_management_cut NUMERIC DEFAULT 10;

@@ -113,7 +113,7 @@ async function fetchApprovedPropertyIds() {
 async function fetchProperty(propertyId) {
   const { data, error } = await supabaseClient
     .from('properties')
-    .select('id, street, city, state, zip, zillow_link, income_efficiency')
+    .select('id, street, city, state, zip, zillow_link, income_efficiency, property_management_cut')
     .eq('id', propertyId)
     .single();
   if (error) { console.error('fetchProperty:', error.message); return null; }
@@ -126,6 +126,22 @@ async function updatePropertyIncomeEfficiency(propertyId, value) {
     .update({ income_efficiency: value })
     .eq('id', propertyId);
   if (error) { console.error('updatePropertyIncomeEfficiency:', error.message); }
+}
+
+async function updatePropertyManagementCut(propertyId, value) {
+  const { error } = await supabaseClient
+    .from('properties')
+    .update({ property_management_cut: value })
+    .eq('id', propertyId);
+  if (error) { console.error('updatePropertyManagementCut:', error.message); }
+}
+
+async function updatePropertyZillowLink(propertyId, link) {
+  const { error } = await supabaseClient
+    .from('properties')
+    .update({ zillow_link: link || null })
+    .eq('id', propertyId);
+  if (error) { console.error('updatePropertyZillowLink:', error.message); }
 }
 
 function formatAddress({ street, city, state, zip }) {
@@ -248,7 +264,7 @@ async function recomputeAllScenarios() {
   // Fetch all active GRASP scenarios with their property's income_efficiency in one query
   const { data: scenarios, error } = await supabaseClient
     .from('scenarios')
-    .select('id, inputs, computed, bedrooms_or_units, bedroom_details, calculate_per_bedroom, properties(income_efficiency)')
+    .select('id, inputs, computed, bedrooms_or_units, bedroom_details, calculate_per_bedroom, properties(income_efficiency, property_management_cut)')
     .eq('module', 'GRASP')
     .is('archived_at', null);
 
@@ -258,6 +274,7 @@ async function recomputeAllScenarios() {
   const updates = scenarios.map(s => {
     const inp = s.inputs || {};
     const incomeEfficiencyPct = s.properties?.income_efficiency ?? 80;
+    const propertyManagementCutPct = s.properties?.property_management_cut ?? 10;
     // inputs stores taxesAnnual; computeAll expects taxesMonthly
     const taxesMonthly = (inp.taxesAnnual ?? 0) / 12;
 
@@ -279,6 +296,7 @@ async function recomputeAllScenarios() {
       rentPerUnitMonthly,
       bedroomsOrUnits: s.bedrooms_or_units,
       incomeEfficiencyPct,
+      propertyManagementCutPct,
     });
     return {
       id: s.id,
