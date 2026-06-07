@@ -418,6 +418,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (currentPropertyId) {
           await updatePropertyZillowLink(currentPropertyId, normalized.link.trim() || null);
           if (currentProperty) currentProperty.zillow_link = normalized.link.trim() || null;
+          const addrChanged =
+            normalized.street.trim() !== (currentProperty?.street ?? '') ||
+            normalized.city.trim()   !== (currentProperty?.city   ?? '') ||
+            normalized.state.trim()  !== (currentProperty?.state  ?? '') ||
+            normalized.zip.trim()    !== (currentProperty?.zip    ?? '');
+          if (addrChanged) {
+            await updatePropertyAddress(currentPropertyId, {
+              street: normalized.street.trim(),
+              city:   normalized.city.trim(),
+              state:  normalized.state.trim(),
+              zip:    normalized.zip.trim(),
+            });
+            if (currentProperty) {
+              currentProperty.street = normalized.street.trim();
+              currentProperty.city   = normalized.city.trim();
+              currentProperty.state  = normalized.state.trim();
+              currentProperty.zip    = normalized.zip.trim();
+            }
+          }
         }
         showToast("Scenario updated.", "success");
       } else {

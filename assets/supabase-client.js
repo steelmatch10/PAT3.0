@@ -144,6 +144,14 @@ async function updatePropertyZillowLink(propertyId, link) {
   if (error) { console.error('updatePropertyZillowLink:', error.message); }
 }
 
+async function updatePropertyAddress(propertyId, { street, city, state, zip }) {
+  const { error } = await supabaseClient
+    .from('properties')
+    .update({ street, city, state, zip })
+    .eq('id', propertyId);
+  if (error) { console.error('updatePropertyAddress:', error.message); }
+}
+
 function formatAddress({ street, city, state, zip }) {
   return `${street}, ${city}, ${state} ${zip}`;
 }

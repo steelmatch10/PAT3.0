@@ -623,6 +623,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (currentPropertyId) {
           await updatePropertyZillowLink(currentPropertyId, (els.link.value || "").trim() || null);
           if (currentProperty) currentProperty.zillow_link = (els.link.value || "").trim() || null;
+          const fStreet = els.addrStreet.value.trim();
+          const fCity   = els.addrCity.value.trim();
+          const fState  = els.addrState.value.trim();
+          const fZip    = els.addrZip.value.trim();
+          const addrChanged =
+            fStreet !== (currentProperty?.street ?? '') ||
+            fCity   !== (currentProperty?.city   ?? '') ||
+            fState  !== (currentProperty?.state  ?? '') ||
+            fZip    !== (currentProperty?.zip    ?? '');
+          if (addrChanged) {
+            await updatePropertyAddress(currentPropertyId, { street: fStreet, city: fCity, state: fState, zip: fZip });
+            if (currentProperty) {
+              currentProperty.street = fStreet;
+              currentProperty.city   = fCity;
+              currentProperty.state  = fState;
+              currentProperty.zip    = fZip;
+            }
+          }
         }
         showToast("Scenario saved.", "success");
         lastSavedSnapshot = JSON.stringify(collectForm());
