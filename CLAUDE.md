@@ -42,7 +42,8 @@ Analyzed properties are saved to a searchable catalogue with export/import suppo
 ## Architecture
 - Pure **vanilla JS / HTML / CSS** — no framework, no bundler, no build step
 - **No npm dependencies** — open any `.html` file directly in a browser to run locally
-- Client-side persistence via **browser LocalStorage**
+- Persistence via **Supabase** (PostgreSQL); `assets/supabase-client.js` owns all DB calls
+- `assets/supabase-config.js` and `.env` are gitignored — never commit them
 
 ## File Map
 
@@ -59,37 +60,37 @@ Analyzed properties are saved to a searchable catalogue with export/import suppo
 | `assets/styles.css` | Global styles and dark-mode CSS variables |
 
 ## Data Layer
-LocalStorage key: `pat-1.0.0`
+Supabase PostgreSQL. Two primary tables:
 
-```json
-{
-  "schemaVersion": "pat-1.0.0",
-  "properties": [
-    {
-      "id": "string",
-      "module": "GRASP | FRAT",
-      "inputs": {},
-      "computed": {},
-      "bands": {},
-      "source": { "address": "string" },
-      "updatedAt": "ISO timestamp",
-      "pinned": false
-    }
-  ]
-}
-```
+**`properties`** — one row per physical property
+- `id`, `street`, `city`, `state`, `zip` (NOT NULL, UNIQUE on street+zip)
+- `zillow_link`, `notes`, `pinned`, `income_efficiency`, `property_management_cut`
+- `created_at`, `updated_at`, `deleted_at` (soft delete)
+
+**`scenarios`** — one or more per property (multi-scenario support)
+- `id`, `property_id` (FK), `module` (GRASP | FRAT)
+- `inputs` (JSONB — all form fields), `name`, `description`
+- `archived_at`, `created_at`, `updated_at`
+
+Key non-obvious schema facts:
+- `property_management_cut` replaces the old hardcoded 10% vacancy factor — it's per-property and covers PM + vacancy combined
+- `income_efficiency` is the DSCR lending factor (default 0.80) — per-property, user-adjustable
+- `taxesAnnual` stored in `inputs` JSONB as annual value; divide by 12 before passing to `computeAll()`
+- `miscRateAnnual` stored in `inputs` as decimal (0.01 = 1%); form displays as percentage
 
 ## Formula Reference
 - **`migration/Formulas.md`** — authoritative PAT 2.0 formula spec for both GRASP and FRAT. Read this before touching any calculation in `app.js` or `frat.js`.
 - Key non-obvious facts:
   - GRASP NOI **and cash flow** both use **90% of gross rent** (10% vacancy factor applies to all income metrics)
-  - GRASP DSCR = **(NOI × 0.80)** / (mortgage × 12) — conservative 80% lending standard
+  - GRASP DSCR = **(NOI × incomeEfficiency)** / (mortgage × 12) — `incomeEfficiency` is the per-property lending factor (default 0.80)
   - FRAT totalPurchaseCap = down + closing only (flipping cost is **financed into the loan**, not upfront cash)
-  - Misc cost is read per-scenario from the CSV; `CONSTANTS.MISC_RATE_ANNUAL` is only a fallback default
+  - Misc cost is read per-scenario from `inputs` JSONB; `CONSTANTS.MISC_RATE_ANNUAL` is only a fallback default
+  - `closingCosts` in GRASP auto-calculates at 2.5% of property value; `dataset.autoCalc` flag controls this
 
 ## Key Patterns
-- **Shared utilities** live in `assets/app.js`: LocalStorage read/write, address normalization, duplicate detection, currency/percentage formatting, toast notifications, modal confirmations.
-- **Module logic** (`grasp.js`, `frat.js`) handles form state, calculation, KPI banding, and saving to the catalogue.
+- **Shared utilities** live in `assets/app.js`: address normalization, duplicate detection, currency/percentage formatting, toast notifications, modal confirmations.
+- **DB calls** live in `assets/supabase-client.js` — narrow single-purpose functions per field/operation (e.g. `updatePropertyZillowLink`, `updatePropertyAddress`).
+- **Module logic** (`grasp.js`, `frat.js`) handles form state, calculation, KPI banding, and saving via Supabase.
 - **Page controllers** are self-contained — each JS file owns its page's event listeners and DOM updates.
 - GRASP auto-saves form state and view mode (monthly/annual) to LocalStorage between sessions.
 
@@ -101,6 +102,32 @@ GRASP.html       → rental analysis
 FRAT.html        → fix-and-flip analysis
 Catalogue.html   → saved properties
 ```
+
+---
+
+## Project Status (updated 2026-06-07)
+
+**Active branch:** `GraspBugFix_Misc-OperatingExpenses`
+**Last commit:** `6d92490` — property management cut, smart address input, suggested rent fix, Zillow link persistence
+
+### Completed (this branch)
+- Property Management Cut — replaces hardcoded 10% vacancy; per-property DB column, wired through `computeAll` and Supabase
+- Smart Address Input — single paste-friendly `#fullAddress` field in GRASP and FRAT; hidden fields remain save source of truth
+- Suggested rent targets — `rentPerUnitForCoC`/`rentPerUnitForCap` denominators use `(1 - propertyManagementCut)`
+- Zillow link persistence — `updatePropertyZillowLink()` called in both GRASP and FRAT update paths
+- `parseFullAddress` city fallback bug fixed in both modules
+- **Address editing persistence** — `updatePropertyAddress()` added to `supabase-client.js`; called in GRASP and FRAT update paths when address fields have changed
+
+### Open Items (priority order)
+1. **Investor-created scenario indicator** — when investor creates a scenario, founders should see a badge. Needs DB column + UI treatment.
+2. **Per-property schema migration** — move taxes/insurance/HOA/rate/loanLength from `scenarios.inputs` JSONB → `properties` table. Agreed, not started.
+3. **`computeAllGRASP()` / `computeAllFRAT()` split** — migrate from single `computeAll` in `app.js` to two independent functions to prevent GRASP-only changes from silently leaving FRAT behind.
+
+### Key Design Decisions (non-obvious)
+- `get_my_role()` is SECURITY DEFINER — do NOT remove this attribute
+- Scenario dropdown in GRASP read-only mode stays ENABLED — investors can browse scenarios
+- Investors can create new scenarios on properties they have been assigned/approved for
+- Address fields are read-only for non-founders (`setAddressReadonly(true)` called on load)
 
 ---
 
@@ -123,7 +150,10 @@ Catalogue.html   → saved properties
 - Write rules for yourself that prevent the same mistake
 - Ruthlessly iterate on these lessons until mistake rate drops
 - Review lessons at session start for relevant project context
-- **After every task:** scan the project root for empty or stray text files and delete them — keep the workspace clean
+- **After every task:**
+  1. Scan the project root for empty or stray files (`.txt`, no-extension artifacts) and delete them
+  2. Run `git status --short` and delete any untracked files you did not intentionally create
+  3. Update the **Project Status** section in `CLAUDE.md` — mark completed items, update open items list, note the last commit/branch
 
 ### 8. GRASP/FRAT Parity Rule
 - **GRASP and FRAT are both part of PAT.** Any bug fix, formula change, or UX improvement requested for one module must be evaluated for applicability to the other — even if the user only mentions one.
@@ -154,3 +184,12 @@ Catalogue.html   → saved properties
 - Point at logs, errors, failing tests — then resolve them
 - Zero context switching required from the user
 - Go fix failing CI tests without being told how
+
+### 9. Commit & Push Workflow
+After completing any task that produces changes worth keeping:
+1. Review `git diff` and `git status --short` to understand all changes
+2. Choose a branch name: `fix/<short-description>`, `feat/<short-description>`, or `docs/<short-description>`
+3. `git checkout -b <branch-name>` from the current branch
+4. Stage all intentional changes (specific files — never `git add -A` blindly)
+5. Commit with a concise message describing the *why*, not just the *what*
+6. Push with `git push -u origin <branch-name>`
