@@ -78,6 +78,8 @@ async function fetchProperties() {
       created_at,
       updated_at,
       pinned,
+      listing_status,
+      staged_for_deletion_at,
       scenarios(module, updated_at, archived_at)
     `)
     .is('deleted_at', null)
@@ -113,7 +115,7 @@ async function fetchApprovedPropertyIds() {
 async function fetchProperty(propertyId) {
   const { data, error } = await supabaseClient
     .from('properties')
-    .select('id, street, city, state, zip, zillow_link, income_efficiency, property_management_cut')
+    .select('id, street, city, state, zip, zillow_link, income_efficiency, property_management_cut, listing_status, staged_for_deletion_at')
     .eq('id', propertyId)
     .single();
   if (error) { console.error('fetchProperty:', error.message); return null; }
@@ -178,6 +180,30 @@ async function softDeleteProperty(propertyId) {
   const { error } = await supabaseClient
     .from('properties')
     .update({ deleted_at: new Date().toISOString() })
+    .eq('id', propertyId);
+  if (error) throw error;
+}
+
+async function setPropertyListingStatus(propertyId, status) {
+  const { error } = await supabaseClient
+    .from('properties')
+    .update({ listing_status: status })
+    .eq('id', propertyId);
+  if (error) throw error;
+}
+
+async function stageDeletion(propertyId) {
+  const { error } = await supabaseClient
+    .from('properties')
+    .update({ staged_for_deletion_at: new Date().toISOString() })
+    .eq('id', propertyId);
+  if (error) throw error;
+}
+
+async function cancelStagedDeletion(propertyId) {
+  const { error } = await supabaseClient
+    .from('properties')
+    .update({ staged_for_deletion_at: null })
     .eq('id', propertyId);
   if (error) throw error;
 }

@@ -78,6 +78,21 @@
       <span class="scenario-archived-badge" id="archivedBadge" style="display:none;">Archived</span>
     </div>
 
+    <!-- Property lifecycle actions (founders only, shown when editing an existing property) -->
+    <div class="scenario-bar" id="propertyActionsBar" style="display:none;">
+      <span id="listingStatusBadge" class="scenario-archived-badge" style="display:none;"></span>
+      <select id="listingStatusSelect">
+        <option value="">— Listing status —</option>
+        <option value="For Sale">For Sale</option>
+        <option value="Under Contract">Under Contract</option>
+        <option value="Active Under Contract">Active Under Contract</option>
+        <option value="Sold">Sold</option>
+        <option value="Off Market">Off Market</option>
+      </select>
+      <button class="btn btn-danger" id="archivePropertyBtn" disabled title="Select Sold or Off Market to archive">Archive Property</button>
+      <button class="btn btn-danger" id="deletePropertyBtn">Delete Property</button>
+    </div>
+
     <div id="readOnlyBanner" style="display:none;padding:12px 16px;margin-bottom:16px;background:rgba(110,168,254,.1);border:1px solid rgba(110,168,254,.3);border-radius:8px;color:var(--muted);font-size:13px;">
       You have read-only access to this property. To request editing permissions, contact a team founder.
     </div>

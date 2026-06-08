@@ -668,6 +668,111 @@ window.initProfileWidget = function(user, member) {
   });
 };
 
+// ── Property lifecycle helpers ────────────────────────────────────────────────
+
+/**
+ * Returns the number of business days (Mon–Fri) remaining until a property
+ * staged at `isoString` hits the 5-business-day removal window.
+ * Returns 0 when the window has expired (ready for soft-delete).
+ */
+function businessDaysUntilDeletion(isoString) {
+  const start = new Date(isoString);
+  const now   = new Date();
+  if (now >= start) {
+    // Count forward from start until we've accumulated 5 business days
+    let bdays = 0;
+    const cursor = new Date(start);
+    while (bdays < 5) {
+      cursor.setDate(cursor.getDate() + 1);
+      const dow = cursor.getDay();
+      if (dow !== 0 && dow !== 6) bdays++;
+    }
+    // cursor is now the expiry date
+    if (now >= cursor) return 0;
+    // Count remaining business days from now to cursor
+    let remaining = 0;
+    const counter = new Date(now);
+    counter.setHours(0, 0, 0, 0);
+    cursor.setHours(0, 0, 0, 0);
+    while (counter < cursor) {
+      counter.setDate(counter.getDate() + 1);
+      const dow = counter.getDay();
+      if (dow !== 0 && dow !== 6) remaining++;
+    }
+    return remaining;
+  }
+  return 5;
+}
+
+/**
+ * Multi-choice modal for archiving a property with Sold/Off Market status.
+ * Resolves with: 'archive-only' | 'archive-stage' | 'remove' | 'cancel'
+ */
+function showArchiveModal(status) {
+  return new Promise((resolve) => {
+    const el = document.createElement("div");
+    el.className = "modal-overlay";
+    el.style.display = "flex";
+    el.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="arch-modal-title" style="max-width:420px;">
+        <h3 id="arch-modal-title">Archive Property — ${status}</h3>
+        <p style="margin-bottom:1rem;">This property is marked <strong>${status}</strong>. Choose how to proceed:</p>
+        <div class="actions" style="flex-direction:column;gap:.5rem;align-items:stretch;">
+          <button class="btn" data-choice="archive-only">Archive only — keep in history, no removal</button>
+          <button class="btn" data-choice="archive-stage">Archive + stage removal (5 business days, with Undo)</button>
+          <button class="btn btn-danger" data-choice="remove">Remove from Catalogue now</button>
+          <button class="btn" data-choice="cancel">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    function pick(choice) {
+      el.remove();
+      resolve(choice);
+    }
+    el.querySelectorAll('[data-choice]').forEach(btn =>
+      btn.addEventListener('click', () => pick(btn.dataset.choice))
+    );
+    el.addEventListener('click', e => { if (e.target === el) pick('cancel'); });
+    document.addEventListener('keydown', function onKey(e) {
+      if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); pick('cancel'); }
+    });
+  });
+}
+
+/**
+ * Multi-choice modal for deleting a property regardless of listing status.
+ * Resolves with: 'remove' | 'stage' | 'cancel'
+ */
+function showDeleteModal() {
+  return new Promise((resolve) => {
+    const el = document.createElement("div");
+    el.className = "modal-overlay";
+    el.style.display = "flex";
+    el.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="del-modal-title" style="max-width:400px;">
+        <h3 id="del-modal-title">Remove Property</h3>
+        <p style="margin-bottom:1rem;">How would you like to remove this property?</p>
+        <div class="actions" style="flex-direction:column;gap:.5rem;align-items:stretch;">
+          <button class="btn btn-danger" data-choice="remove">Remove from Catalogue now</button>
+          <button class="btn" data-choice="stage">Stage for removal (5 business days, with Undo)</button>
+          <button class="btn" data-choice="cancel">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    function pick(choice) {
+      el.remove();
+      resolve(choice);
+    }
+    el.querySelectorAll('[data-choice]').forEach(btn =>
+      btn.addEventListener('click', () => pick(btn.dataset.choice))
+    );
+    el.addEventListener('click', e => { if (e.target === el) pick('cancel'); });
+    document.addEventListener('keydown', function onKey(e) {
+      if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); pick('cancel'); }
+    });
+  });
+}
+
 // CommonJS exports for Jest test environments (no-op in browser)
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {

@@ -277,6 +277,81 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (founder || member?.global_role === "investor") {
       els.scenarioActionsBar.style.display = "none"; // shown when a scenario is loaded
     }
+
+    // ── Property actions bar (founders only) ────────────────────────────────
+    if (founder) {
+      const propBar          = document.getElementById("propertyActionsBar");
+      const statusSelect     = document.getElementById("listingStatusSelect");
+      const statusBadge      = document.getElementById("listingStatusBadge");
+      const archivePropBtn   = document.getElementById("archivePropertyBtn");
+      const deletePropBtn    = document.getElementById("deletePropertyBtn");
+
+      if (propBar) {
+        propBar.style.display = "flex";
+
+        // Populate current status
+        const currentStatus = currentProperty?.listing_status || "";
+        if (statusSelect) statusSelect.value = currentStatus;
+        if (statusBadge && currentStatus) {
+          statusBadge.textContent = currentStatus;
+          statusBadge.style.display = "inline";
+        }
+
+        // Enable Archive button only for terminal statuses
+        const ARCHIVE_STATUSES = ["Sold", "Off Market"];
+        function syncArchiveBtn() {
+          const val = statusSelect?.value || "";
+          if (archivePropBtn) archivePropBtn.disabled = !ARCHIVE_STATUSES.includes(val);
+        }
+        syncArchiveBtn();
+        statusSelect?.addEventListener("change", syncArchiveBtn);
+
+        // Archive Property
+        archivePropBtn?.addEventListener("click", async () => {
+          const status = statusSelect?.value;
+          if (!ARCHIVE_STATUSES.includes(status)) return;
+          const choice = await showArchiveModal(status);
+          if (choice === "cancel") return;
+          try {
+            await setPropertyListingStatus(currentPropertyId, status);
+            if (currentProperty) currentProperty.listing_status = status;
+            if (statusBadge) { statusBadge.textContent = status; statusBadge.style.display = "inline"; }
+            if (choice === "archive-stage") {
+              await stageDeletion(currentPropertyId);
+              if (currentProperty) currentProperty.staged_for_deletion_at = new Date().toISOString();
+              showToast("Property archived and staged for removal in 5 business days.", "success");
+            } else if (choice === "remove") {
+              await softDeleteProperty(currentPropertyId);
+              showToast("Property removed from Catalogue.", "success");
+              window.location.href = "index.html";
+            } else {
+              showToast("Property archived.", "success");
+            }
+          } catch (err) {
+            showToast(err.message || "Failed to archive property.", "error");
+          }
+        });
+
+        // Delete Property (always available, status-independent)
+        deletePropBtn?.addEventListener("click", async () => {
+          const choice = await showDeleteModal();
+          if (choice === "cancel") return;
+          try {
+            if (choice === "remove") {
+              await softDeleteProperty(currentPropertyId);
+              showToast("Property removed from Catalogue.", "success");
+              window.location.href = "index.html";
+            } else if (choice === "stage") {
+              await stageDeletion(currentPropertyId);
+              if (currentProperty) currentProperty.staged_for_deletion_at = new Date().toISOString();
+              showToast("Property staged for removal in 5 business days. Undo in Catalogue.", "success");
+            }
+          } catch (err) {
+            showToast(err.message || "Failed to remove property.", "error");
+          }
+        });
+      }
+    }
   } else {
     // No propertyId — standalone "add new" mode (fallback; user should come from index.html)
     clearFormForNew();

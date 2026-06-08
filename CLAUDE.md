@@ -107,21 +107,26 @@ Catalogue.html   → saved properties
 
 ## Project Status (updated 2026-06-07)
 
-**Active branch:** `GraspBugFix_Misc-OperatingExpenses`
-**Last commit:** `6d92490` — property management cut, smart address input, suggested rent fix, Zillow link persistence
+**Active branch:** `feat/property-archive-delete-flow`
+**Last commit:** `91179d6` — address editing persistence, CLAUDE.md update, lessons file
 
-### Completed (this branch)
+### Completed
 - Property Management Cut — replaces hardcoded 10% vacancy; per-property DB column, wired through `computeAll` and Supabase
-- Smart Address Input — single paste-friendly `#fullAddress` field in GRASP and FRAT; hidden fields remain save source of truth
+- Smart Address Input — single paste-friendly `#fullAddress` field in GRASP and FRAT
 - Suggested rent targets — `rentPerUnitForCoC`/`rentPerUnitForCap` denominators use `(1 - propertyManagementCut)`
 - Zillow link persistence — `updatePropertyZillowLink()` called in both GRASP and FRAT update paths
 - `parseFullAddress` city fallback bug fixed in both modules
-- **Address editing persistence** — `updatePropertyAddress()` added to `supabase-client.js`; called in GRASP and FRAT update paths when address fields have changed
+- Address editing persistence — `updatePropertyAddress()` in `supabase-client.js`, called on save when address fields change
+- **Phase 1A: Property archive/delete flow** — Zillow-style listing status, staged-deletion with 5-business-day Undo window, Archive/Delete modals in GRASP and FRAT, status badge + Undo banner in Catalogue. Migration 11 applied to Supabase.
 
 ### Open Items (priority order)
-1. **Investor-created scenario indicator** — when investor creates a scenario, founders should see a badge. Needs DB column + UI treatment.
-2. **Per-property schema migration** — move taxes/insurance/HOA/rate/loanLength from `scenarios.inputs` JSONB → `properties` table. Agreed, not started.
-3. **`computeAllGRASP()` / `computeAllFRAT()` split** — migrate from single `computeAll` in `app.js` to two independent functions to prevent GRASP-only changes from silently leaving FRAT behind.
+1. **Phase 1B (parallel):** Security — password change, MFA/OTP (`settings.html`, `supabase-client.js`)
+2. **Phase 1B (parallel):** Investor-created scenario indicator — badge when investor creates scenario; needs `created_by` column check + UI
+3. **Phase 2:** Go live on Vercel — after Phase 1B complete
+4. **Phase 3A:** Stitch UI overhaul (existing project: "Real Estate Investment Portal", id `18231999868876344727`)
+5. **Phase 3B:** Playwright tests — new session required; prompt saved in plan file
+6. **Per-property schema migration** — move taxes/insurance/HOA/rate/loanLength from `scenarios.inputs` JSONB → `properties` table. Defer until after go-live.
+7. **`computeAllGRASP()` / `computeAllFRAT()` split** — defer until after go-live.
 
 ### Key Design Decisions (non-obvious)
 - `get_my_role()` is SECURITY DEFINER — do NOT remove this attribute
