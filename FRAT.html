@@ -78,6 +78,12 @@
       <span class="scenario-archived-badge" id="archivedBadge" style="display:none;">Archived</span>
     </div>
 
+    <!-- Property lifecycle actions (founders only, shown when editing an existing property) -->
+    <div class="scenario-bar" id="propertyActionsBar" style="display:none;">
+      <span id="listingStatusBadge" class="scenario-archived-badge" style="display:none;"></span>
+      <button class="btn btn-archive" id="archivePropertyBtn">🗄 Archive Property</button>
+    </div>
+
     <div id="readOnlyBanner" style="display:none;padding:12px 16px;margin-bottom:16px;background:rgba(110,168,254,.1);border:1px solid rgba(110,168,254,.3);border-radius:8px;color:var(--muted);font-size:13px;">
       You have read-only access to this property. To request editing permissions, contact a team founder.
     </div>
@@ -208,7 +214,7 @@
         <!-- Buttons aligned like GRASP (left) -->
         <div class="row" style="gap:8px">
           <button class="btn primary" id="addOrSaveBtn">Save Scenario</button>
-          <button class="btn" id="clearBtn">Clear Inputs</button>
+          <button class="btn" id="clearBtn">Clear All Input</button>
         </div>
         <div id="saveError" style="color:var(--bad);font-size:13px;margin-top:8px;display:none;"></div>
       </div>

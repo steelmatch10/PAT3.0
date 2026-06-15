@@ -65,7 +65,9 @@ Supabase PostgreSQL. Two primary tables:
 **`properties`** — one row per physical property
 - `id`, `street`, `city`, `state`, `zip` (NOT NULL, UNIQUE on street+zip)
 - `zillow_link`, `notes`, `pinned`, `income_efficiency`, `property_management_cut`
-- `created_at`, `updated_at`, `deleted_at` (soft delete)
+- `listing_status` (Zillow-style: For Sale, Pending, Sold, Off Market, Not Listed)
+- `archived_at`, `archive_reason` — set via Archive Property modal (migration 12)
+- `created_at`, `updated_at`, `deleted_at` (dormant soft-delete column, no longer written to)
 
 **`scenarios`** — one or more per property (multi-scenario support)
 - `id`, `property_id` (FK), `module` (GRASP | FRAT)
@@ -105,29 +107,40 @@ Catalogue.html   → saved properties
 
 ---
 
-## Project Status (updated 2026-06-07)
+## Project Status (updated 2026-06-15)
 
-**Active branch:** `GraspBugFix_Misc-OperatingExpenses`
-**Last commit:** `6d92490` — property management cut, smart address input, suggested rent fix, Zillow link persistence
+**Active branch:** `feat/property-archive-delete-flow`
+**Last commit:** `d409639` — refine archive/delete flow: reason-required archive modal, true hard delete, themed dropdown (pushed)
 
-### Completed (this branch)
+### Completed
 - Property Management Cut — replaces hardcoded 10% vacancy; per-property DB column, wired through `computeAll` and Supabase
-- Smart Address Input — single paste-friendly `#fullAddress` field in GRASP and FRAT; hidden fields remain save source of truth
+- Smart Address Input — single paste-friendly `#fullAddress` field in GRASP and FRAT
 - Suggested rent targets — `rentPerUnitForCoC`/`rentPerUnitForCap` denominators use `(1 - propertyManagementCut)`
 - Zillow link persistence — `updatePropertyZillowLink()` called in both GRASP and FRAT update paths
 - `parseFullAddress` city fallback bug fixed in both modules
-- **Address editing persistence** — `updatePropertyAddress()` added to `supabase-client.js`; called in GRASP and FRAT update paths when address fields have changed
+- Address editing persistence — `updatePropertyAddress()` in `supabase-client.js`, called on save when address fields change
+- **Phase 1A: Property archive/delete flow (revised)** — Archive Property is always enabled (no listing-status prerequisite); opens a modal requiring a reason (max 100 chars) and an optional listing-status selection, calling `archiveProperty()`. Standalone listing-status dropdown removed from GRASP/FRAT — status is now only set via the Archive modal. Delete Property button removed entirely; the 5-business-day staged-deletion/Undo system (`businessDaysUntilDeletion`, `softDeleteProperty`, `stageDeletion`, `cancelStagedDeletion`, Undo banner in Catalogue) was fully removed. New true hard-delete flow: "Clear All Input" (renamed from "Clear Inputs") on an existing property morphs the Save button into a red "Erase Property from Database" button, which opens a type-the-street-address confirmation modal and calls `hardDeleteProperty()` (real SQL DELETE, cascades to scenarios). For new/unsaved properties, the same button instead reads "Add New Property Analysis" and is disabled until the user edits again. Catalogue now shows an "Archived" badge (with reason on hover) in place of the old listing-status/staged-deletion badges. GRASP's "Properties" nav button renamed to "Home" to match FRAT/Catalogue.
+- **Migration 12 applied to Supabase** — `properties` now has `archived_at`/`archive_reason`; `staged_for_deletion_at` + its index dropped.
+- **Archive UI polish** — Archive Property button restyled with a distinct amber `.btn-archive` look (was sharing the harsh red `.btn-danger` outline with the scenario-archive button). Archive/Erase modals rebuilt with `.modal-header`/`.modal-icon`/`.modal-field` styling, live character counter on the reason field, inline validation. Added `createStyledDropdown()` in `app.js` — a themed custom dropdown replacing the archive modal's `<select>`, since native option-list popups ignore dark-theme CSS in Chrome/Edge.
 
 ### Open Items (priority order)
-1. **Investor-created scenario indicator** — when investor creates a scenario, founders should see a badge. Needs DB column + UI treatment.
-2. **Per-property schema migration** — move taxes/insurance/HOA/rate/loanLength from `scenarios.inputs` JSONB → `properties` table. Agreed, not started.
-3. **`computeAllGRASP()` / `computeAllFRAT()` split** — migrate from single `computeAll` in `app.js` to two independent functions to prevent GRASP-only changes from silently leaving FRAT behind.
+1. **Archived → unarchived restore flow** — explicitly deferred by user; build later.
+2. **Phase 1B (parallel):** Security — password change, MFA/OTP (`settings.html`, `supabase-client.js`)
+3. **Phase 1B (parallel):** Investor-created scenario indicator — badge when investor creates scenario; needs `created_by` column check + UI
+4. **Phase 2:** Go live on Vercel — after Phase 1B complete
+5. **Phase 3A:** Stitch UI overhaul (existing project: "Real Estate Investment Portal", id `18231999868876344727`)
+6. **Phase 3B:** Playwright tests — new session required; prompt saved in plan file
+7. **Per-property schema migration** — move taxes/insurance/HOA/rate/loanLength from `scenarios.inputs` JSONB → `properties` table. Defer until after go-live.
+8. **`computeAllGRASP()` / `computeAllFRAT()` split** — defer until after go-live.
 
 ### Key Design Decisions (non-obvious)
 - `get_my_role()` is SECURITY DEFINER — do NOT remove this attribute
 - Scenario dropdown in GRASP read-only mode stays ENABLED — investors can browse scenarios
 - Investors can create new scenarios on properties they have been assigned/approved for
 - Address fields are read-only for non-founders (`setAddressReadonly(true)` called on load)
+- Archiving a property is currently one-way for this session (no unarchive UI yet — see Open Items)
+- "Erase Property from Database" is a TRUE hard delete (cascades to scenarios), irreversible, type-to-confirm — distinct from the dormant `deleted_at` soft-delete column which nothing writes to anymore
+- `createStyledDropdown()` in `app.js` is a reusable themed-dropdown helper — consider adopting it for other `<select>` elements if their native popups look out of place
 
 ---
 
