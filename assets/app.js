@@ -671,63 +671,130 @@ window.initProfileWidget = function(user, member) {
 // ── Property lifecycle helpers ────────────────────────────────────────────────
 
 /**
- * Returns the number of business days (Mon–Fri) remaining until a property
- * staged at `isoString` hits the 5-business-day removal window.
- * Returns 0 when the window has expired (ready for soft-delete).
+ * Builds a themed dropdown (button + floating option list) to replace a native
+ * <select>, whose option-list popup can't be restyled cross-browser.
+ * `options` is an array of { value, label }. Returns { el, getValue, setValue }.
+ * `el` is the dropdown container — append it where the <select> would go.
  */
-function businessDaysUntilDeletion(isoString) {
-  const start = new Date(isoString);
-  const now   = new Date();
-  if (now >= start) {
-    // Count forward from start until we've accumulated 5 business days
-    let bdays = 0;
-    const cursor = new Date(start);
-    while (bdays < 5) {
-      cursor.setDate(cursor.getDate() + 1);
-      const dow = cursor.getDay();
-      if (dow !== 0 && dow !== 6) bdays++;
-    }
-    // cursor is now the expiry date
-    if (now >= cursor) return 0;
-    // Count remaining business days from now to cursor
-    let remaining = 0;
-    const counter = new Date(now);
-    counter.setHours(0, 0, 0, 0);
-    cursor.setHours(0, 0, 0, 0);
-    while (counter < cursor) {
-      counter.setDate(counter.getDate() + 1);
-      const dow = counter.getDay();
-      if (dow !== 0 && dow !== 6) remaining++;
-    }
-    return remaining;
+function createStyledDropdown(options, initialValue) {
+  const wrap = document.createElement("div");
+  wrap.className = "styled-dropdown";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "styled-dropdown-toggle";
+
+  const list = document.createElement("div");
+  list.className = "styled-dropdown-list";
+
+  let value = initialValue ?? options[0]?.value ?? "";
+
+  function render() {
+    const current = options.find(o => o.value === value) ?? options[0];
+    button.textContent = current?.label ?? "";
+    list.innerHTML = "";
+    options.forEach(opt => {
+      const item = document.createElement("div");
+      item.className = "styled-dropdown-option" + (opt.value === value ? " selected" : "");
+      item.textContent = opt.label;
+      item.addEventListener("click", () => {
+        value = opt.value;
+        render();
+        close();
+      });
+      list.appendChild(item);
+    });
   }
-  return 5;
+
+  function open() { wrap.classList.add("open"); }
+  function close() { wrap.classList.remove("open"); }
+
+  button.addEventListener("click", () => {
+    wrap.classList.contains("open") ? close() : open();
+  });
+  document.addEventListener("click", e => {
+    if (!wrap.contains(e.target)) close();
+  });
+
+  render();
+  wrap.appendChild(button);
+  wrap.appendChild(list);
+
+  return {
+    el: wrap,
+    getValue: () => value,
+    setValue: (v) => { value = v; render(); },
+  };
 }
 
 /**
- * Multi-choice modal for archiving a property with Sold/Off Market status.
- * Resolves with: 'archive-only' | 'archive-stage' | 'remove' | 'cancel'
+ * Modal for archiving a property: collects a required reason (max 100 chars)
+ * and an optional listing status to record alongside the archive.
+ * Resolves with { reason, status } or null if cancelled.
+ * NOTE: Archiving is currently one-way — the archived-to-unarchived
+ * restore flow is planned for a future session.
  */
-function showArchiveModal(status) {
+function showArchiveReasonModal(currentStatus) {
   return new Promise((resolve) => {
     const el = document.createElement("div");
     el.className = "modal-overlay";
     el.style.display = "flex";
     el.innerHTML = `
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="arch-modal-title" style="max-width:420px;">
-        <h3 id="arch-modal-title">Archive Property — ${status}</h3>
-        <p style="margin-bottom:1rem;">This property is marked <strong>${status}</strong>. Choose how to proceed:</p>
-        <div class="actions" style="flex-direction:column;gap:.5rem;align-items:stretch;">
-          <button class="btn" data-choice="archive-only">Archive only — keep in history, no removal</button>
-          <button class="btn" data-choice="archive-stage">Archive + stage removal (5 business days, with Undo)</button>
-          <button class="btn btn-danger" data-choice="remove">Remove from Catalogue now</button>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="arch-modal-title" style="max-width:440px;">
+        <div class="modal-header">
+          <div class="modal-icon archive">🗄</div>
+          <h3 id="arch-modal-title" style="margin:0;">Archive Property</h3>
+        </div>
+        <p>This moves the property out of active views. It can be referenced later, but unarchiving isn't available yet.</p>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <label class="modal-field" id="arch-reason-field">
+            Reason for archiving
+            <input type="text" id="arch-reason" maxlength="100" placeholder="e.g., Sold off-market, owner request, duplicate listing" autocomplete="off" />
+            <div class="char-count"><span id="arch-reason-count">0</span>/100</div>
+            <div class="modal-field-error">A reason is required to archive this property.</div>
+          </label>
+          <div class="modal-field">
+            Update listing status (optional)
+            <div id="arch-status-mount"></div>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:1.25rem;">
           <button class="btn" data-choice="cancel">Cancel</button>
+          <button class="btn btn-archive-submit" data-choice="archive">Archive Property</button>
         </div>
       </div>`;
     document.body.appendChild(el);
+    const reasonField = el.querySelector('#arch-reason-field');
+    const reasonInput = el.querySelector('#arch-reason');
+    const reasonCount = el.querySelector('#arch-reason-count');
+    const statusOptions = [
+      { value: "", label: "No change" },
+      { value: "For Sale", label: "For Sale" },
+      { value: "Under Contract", label: "Under Contract" },
+      { value: "Active Under Contract", label: "Active Under Contract" },
+      { value: "Sold", label: "Sold" },
+      { value: "Off Market", label: "Off Market" },
+    ];
+    const statusDropdown = createStyledDropdown(statusOptions, currentStatus || "");
+    el.querySelector('#arch-status-mount').appendChild(statusDropdown.el);
+    reasonInput.addEventListener('input', () => {
+      reasonCount.textContent = reasonInput.value.length;
+      reasonField.classList.remove('has-error');
+    });
     function pick(choice) {
+      if (choice === 'archive') {
+        const reason = reasonInput.value.trim();
+        if (!reason) {
+          reasonField.classList.add('has-error');
+          reasonInput.focus();
+          return;
+        }
+        el.remove();
+        resolve({ reason, status: statusDropdown.getValue() || null });
+        return;
+      }
       el.remove();
-      resolve(choice);
+      resolve(null);
     }
     el.querySelectorAll('[data-choice]').forEach(btn =>
       btn.addEventListener('click', () => pick(btn.dataset.choice))
@@ -736,40 +803,54 @@ function showArchiveModal(status) {
     document.addEventListener('keydown', function onKey(e) {
       if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); pick('cancel'); }
     });
+    reasonInput.focus();
   });
 }
 
 /**
- * Multi-choice modal for deleting a property regardless of listing status.
- * Resolves with: 'remove' | 'stage' | 'cancel'
+ * Confirmation modal for permanently erasing a property and its scenarios.
+ * Requires typing the property's street address to confirm.
+ * Resolves with true (confirmed) or false (cancelled).
  */
-function showDeleteModal() {
+function showEraseConfirmModal(streetAddress) {
   return new Promise((resolve) => {
     const el = document.createElement("div");
     el.className = "modal-overlay";
     el.style.display = "flex";
     el.innerHTML = `
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="del-modal-title" style="max-width:400px;">
-        <h3 id="del-modal-title">Remove Property</h3>
-        <p style="margin-bottom:1rem;">How would you like to remove this property?</p>
-        <div class="actions" style="flex-direction:column;gap:.5rem;align-items:stretch;">
-          <button class="btn btn-danger" data-choice="remove">Remove from Catalogue now</button>
-          <button class="btn" data-choice="stage">Stage for removal (5 business days, with Undo)</button>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="erase-modal-title" style="max-width:440px;">
+        <div class="modal-header">
+          <div class="modal-icon erase">⚠</div>
+          <h3 id="erase-modal-title" style="margin:0;">Erase Property from Database</h3>
+        </div>
+        <p>This permanently deletes <span class="modal-address">${streetAddress}</span> and all of its scenarios. This action is irreversible.</p>
+        <label class="modal-field">
+          Type the street address to confirm
+          <input type="text" id="erase-confirm" placeholder="${streetAddress}" autocomplete="off" />
+        </label>
+        <div class="actions" style="margin-top:1.25rem;">
           <button class="btn" data-choice="cancel">Cancel</button>
+          <button class="btn btn-danger" data-choice="erase" disabled>Erase Permanently</button>
         </div>
       </div>`;
     document.body.appendChild(el);
+    const input = el.querySelector('#erase-confirm');
+    const eraseBtn = el.querySelector('[data-choice="erase"]');
+    input.addEventListener('input', () => {
+      eraseBtn.disabled = input.value.trim().toLowerCase() !== String(streetAddress).trim().toLowerCase();
+    });
     function pick(choice) {
       el.remove();
-      resolve(choice);
+      resolve(choice === 'erase');
     }
     el.querySelectorAll('[data-choice]').forEach(btn =>
-      btn.addEventListener('click', () => pick(btn.dataset.choice))
+      btn.addEventListener('click', () => { if (!btn.disabled) pick(btn.dataset.choice); })
     );
     el.addEventListener('click', e => { if (e.target === el) pick('cancel'); });
     document.addEventListener('keydown', function onKey(e) {
       if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); pick('cancel'); }
     });
+    input.focus();
   });
 }
 

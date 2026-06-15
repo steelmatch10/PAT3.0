@@ -65,7 +65,9 @@ Supabase PostgreSQL. Two primary tables:
 **`properties`** — one row per physical property
 - `id`, `street`, `city`, `state`, `zip` (NOT NULL, UNIQUE on street+zip)
 - `zillow_link`, `notes`, `pinned`, `income_efficiency`, `property_management_cut`
-- `created_at`, `updated_at`, `deleted_at` (soft delete)
+- `listing_status` (Zillow-style: For Sale, Pending, Sold, Off Market, Not Listed)
+- `archived_at`, `archive_reason` — set via Archive Property modal (migration 12)
+- `created_at`, `updated_at`, `deleted_at` (dormant soft-delete column, no longer written to)
 
 **`scenarios`** — one or more per property (multi-scenario support)
 - `id`, `property_id` (FK), `module` (GRASP | FRAT)
@@ -105,10 +107,10 @@ Catalogue.html   → saved properties
 
 ---
 
-## Project Status (updated 2026-06-07)
+## Project Status (updated 2026-06-15)
 
 **Active branch:** `feat/property-archive-delete-flow`
-**Last commit:** `91179d6` — address editing persistence, CLAUDE.md update, lessons file
+**Last commit:** `e736586` — property archive/delete flow with Zillow-style listing status (this session's changes are uncommitted on top)
 
 ### Completed
 - Property Management Cut — replaces hardcoded 10% vacancy; per-property DB column, wired through `computeAll` and Supabase
@@ -117,22 +119,26 @@ Catalogue.html   → saved properties
 - Zillow link persistence — `updatePropertyZillowLink()` called in both GRASP and FRAT update paths
 - `parseFullAddress` city fallback bug fixed in both modules
 - Address editing persistence — `updatePropertyAddress()` in `supabase-client.js`, called on save when address fields change
-- **Phase 1A: Property archive/delete flow** — Zillow-style listing status, staged-deletion with 5-business-day Undo window, Archive/Delete modals in GRASP and FRAT, status badge + Undo banner in Catalogue. Migration 11 applied to Supabase.
+- **Phase 1A: Property archive/delete flow (revised)** — Archive Property is always enabled (no listing-status prerequisite); opens a modal requiring a reason (max 100 chars) and an optional listing-status selection, calling `archiveProperty()`. Standalone listing-status dropdown removed from GRASP/FRAT — status is now only set via the Archive modal. Delete Property button removed entirely; the 5-business-day staged-deletion/Undo system (`businessDaysUntilDeletion`, `softDeleteProperty`, `stageDeletion`, `cancelStagedDeletion`, Undo banner in Catalogue) was fully removed. New true hard-delete flow: "Clear All Input" (renamed from "Clear Inputs") on an existing property morphs the Save button into a red "Erase Property from Database" button, which opens a type-the-street-address confirmation modal and calls `hardDeleteProperty()` (real SQL DELETE, cascades to scenarios). For new/unsaved properties, the same button instead reads "Add New Property Analysis" and is disabled until the user edits again. Catalogue now shows an "Archived" badge (with reason on hover) in place of the old listing-status/staged-deletion badges. GRASP's "Properties" nav button renamed to "Home" to match FRAT/Catalogue. Migration 12 (`archived_at`, `archive_reason`, drops `staged_for_deletion_at`) written but **not yet applied to Supabase**.
 
 ### Open Items (priority order)
-1. **Phase 1B (parallel):** Security — password change, MFA/OTP (`settings.html`, `supabase-client.js`)
-2. **Phase 1B (parallel):** Investor-created scenario indicator — badge when investor creates scenario; needs `created_by` column check + UI
-3. **Phase 2:** Go live on Vercel — after Phase 1B complete
-4. **Phase 3A:** Stitch UI overhaul (existing project: "Real Estate Investment Portal", id `18231999868876344727`)
-5. **Phase 3B:** Playwright tests — new session required; prompt saved in plan file
-6. **Per-property schema migration** — move taxes/insurance/HOA/rate/loanLength from `scenarios.inputs` JSONB → `properties` table. Defer until after go-live.
-7. **`computeAllGRASP()` / `computeAllFRAT()` split** — defer until after go-live.
+1. **Apply migration 12** (`migration/12_property_archive_reason.sql`) to Supabase before relying on archive/erase flows in production.
+2. **Archived → unarchived restore flow** — explicitly deferred by user; build later.
+3. **Phase 1B (parallel):** Security — password change, MFA/OTP (`settings.html`, `supabase-client.js`)
+4. **Phase 1B (parallel):** Investor-created scenario indicator — badge when investor creates scenario; needs `created_by` column check + UI
+5. **Phase 2:** Go live on Vercel — after Phase 1B complete
+6. **Phase 3A:** Stitch UI overhaul (existing project: "Real Estate Investment Portal", id `18231999868876344727`)
+7. **Phase 3B:** Playwright tests — new session required; prompt saved in plan file
+8. **Per-property schema migration** — move taxes/insurance/HOA/rate/loanLength from `scenarios.inputs` JSONB → `properties` table. Defer until after go-live.
+9. **`computeAllGRASP()` / `computeAllFRAT()` split** — defer until after go-live.
 
 ### Key Design Decisions (non-obvious)
 - `get_my_role()` is SECURITY DEFINER — do NOT remove this attribute
 - Scenario dropdown in GRASP read-only mode stays ENABLED — investors can browse scenarios
 - Investors can create new scenarios on properties they have been assigned/approved for
 - Address fields are read-only for non-founders (`setAddressReadonly(true)` called on load)
+- Archiving a property is currently one-way for this session (no unarchive UI yet — see Open Items)
+- "Erase Property from Database" is a TRUE hard delete (cascades to scenarios), irreversible, type-to-confirm — distinct from the dormant `deleted_at` soft-delete column which nothing writes to anymore
 
 ---
 

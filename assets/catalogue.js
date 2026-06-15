@@ -56,7 +56,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         updated_at,
         pinned,
         listing_status,
-        staged_for_deletion_at,
+        archived_at,
+        archive_reason,
         scenarios(
           id,
           module,
@@ -81,17 +82,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       ...p,
       scenarios: (p.scenarios || []).filter(s => !s.archived_at),
     }));
-
-    // Auto-finalize expired staged-deletions (5-business-day window elapsed client-side)
-    const expired = allProperties.filter(p =>
-      p.staged_for_deletion_at && businessDaysUntilDeletion(p.staged_for_deletion_at) <= 0
-    );
-    if (expired.length > 0) {
-      await Promise.all(expired.map(p => softDeleteProperty(p.id).catch(() => {})));
-      allProperties = allProperties.filter(p =>
-        !expired.some(e => e.id === p.id)
-      );
-    }
 
     render();
   }
@@ -277,11 +267,7 @@ document.addEventListener("DOMContentLoaded", async () => {
               ${founder ? `<input type="checkbox" class="cat-select" data-id="${p.id}" onclick="event.stopPropagation()" />` : ''}
               ${founder && p.pinned ? '<span class="cat-pin-badge">Pinned</span>' : ''}
               ${investor && approvedIds.has(p.id) ? '<span class="cat-pin-badge investor">Scenario editing enabled</span>' : ''}
-              ${p.listing_status ? `<span class="cat-pin-badge listing-status">${escapeHtml(p.listing_status)}</span>` : ''}
-              ${founder && p.staged_for_deletion_at ? (() => {
-                const days = businessDaysUntilDeletion(p.staged_for_deletion_at);
-                return `<span class="cat-staged-banner">Removing in ${days} day${days !== 1 ? 's' : ''} — <button class="cat-undo-btn" data-id="${p.id}" onclick="event.stopPropagation()">Undo</button></span>`;
-              })() : ''}
+              ${p.archived_at ? `<span class="cat-pin-badge listing-status" title="${escapeHtml(p.archive_reason || '')}">Archived</span>` : p.listing_status ? `<span class="cat-pin-badge listing-status">${escapeHtml(p.listing_status)}</span>` : ''}
             </div>
             <div class="cat-addr">
               <div class="cat-addr-main">${escapeHtml(street)}</div>
@@ -492,24 +478,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
   }
-
-  // ── Undo staged deletion (event delegation on cards container) ───────────
-  cards.addEventListener('click', async e => {
-    const undoBtn = e.target.closest('.cat-undo-btn');
-    if (!undoBtn) return;
-    e.stopPropagation();
-    const propertyId = undoBtn.dataset.id;
-    try {
-      await cancelStagedDeletion(propertyId);
-      allProperties = allProperties.map(p =>
-        p.id === propertyId ? { ...p, staged_for_deletion_at: null } : p
-      );
-      showToast('Staged removal cancelled. Property is back to archived status.', 'success');
-      render();
-    } catch (err) {
-      showToast('Failed to cancel removal.', 'error');
-    }
-  });
 
   // ── Export (founders only) ─────────────────────────────────────────────────
   const exportBtn    = document.getElementById('exportBtn');

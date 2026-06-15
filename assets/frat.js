@@ -84,6 +84,33 @@ document.addEventListener("DOMContentLoaded", async () => {
   let currentPropertyId = _fratPropId || null;
   let allScenarios = [];
   let currentProperty = null;
+  let formCleared = false; // true right after "Clear All Input" until the user edits again
+
+  // ── Primary button (Save Scenario / Save Changes / Add New Property Analysis / Erase Property from Database) ──
+  function refreshPrimaryButton() {
+    els.addOrSaveBtn.classList.remove("btn-danger");
+    els.addOrSaveBtn.classList.add("primary");
+    if (formCleared && currentPropertyId) {
+      els.addOrSaveBtn.textContent = "Erase Property from Database";
+      els.addOrSaveBtn.classList.remove("primary");
+      els.addOrSaveBtn.classList.add("btn-danger");
+      els.addOrSaveBtn.disabled = false;
+    } else if (!currentPropertyId) {
+      els.addOrSaveBtn.textContent = "Add New Property Analysis";
+      els.addOrSaveBtn.disabled = formCleared;
+    } else {
+      els.addOrSaveBtn.textContent = currentScenarioId ? "Save Changes" : "Save Scenario";
+      els.addOrSaveBtn.disabled = (lastSavedSnapshot !== null && JSON.stringify(collectForm()) === lastSavedSnapshot);
+    }
+  }
+
+  // Any edit after "Clear All Input" cancels the erase/disabled state
+  mainContent.addEventListener("input", () => {
+    if (formCleared) { formCleared = false; refreshPrimaryButton(); }
+  }, true);
+  mainContent.addEventListener("change", () => {
+    if (formCleared) { formCleared = false; refreshPrimaryButton(); }
+  }, true);
 
   // Initialize view mode from localStorage (shared preference with GRASP)
   {
@@ -178,69 +205,59 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ── Property actions bar (founders only) ────────────────────────────────
     if (founder) {
       const propBar        = document.getElementById("propertyActionsBar");
-      const statusSelect   = document.getElementById("listingStatusSelect");
       const statusBadge    = document.getElementById("listingStatusBadge");
       const archivePropBtn = document.getElementById("archivePropertyBtn");
-      const deletePropBtn  = document.getElementById("deletePropertyBtn");
 
       if (propBar) {
         propBar.style.display = "flex";
 
-        const currentStatus = currentProperty?.listing_status || "";
-        if (statusSelect) statusSelect.value = currentStatus;
-        if (statusBadge && currentStatus) {
-          statusBadge.textContent = currentStatus;
-          statusBadge.style.display = "inline";
+        // Show archived badge (with reason on hover) or current listing status
+        if (statusBadge) {
+          if (currentProperty?.archived_at) {
+            statusBadge.textContent = "Archived";
+            statusBadge.title = currentProperty.archive_reason || "";
+            statusBadge.style.display = "inline";
+          } else if (currentProperty?.listing_status) {
+            statusBadge.textContent = currentProperty.listing_status;
+            statusBadge.title = "";
+            statusBadge.style.display = "inline";
+          } else {
+            statusBadge.style.display = "none";
+          }
         }
 
-        const ARCHIVE_STATUSES = ["Sold", "Off Market"];
-        function syncArchiveBtn() {
-          const val = statusSelect?.value || "";
-          if (archivePropBtn) archivePropBtn.disabled = !ARCHIVE_STATUSES.includes(val);
+        // Archive Property — reason required, listing status optional
+        if (archivePropBtn) {
+          if (currentProperty?.archived_at) {
+            archivePropBtn.disabled = true;
+            archivePropBtn.title = "Property already archived.";
+          } else {
+            archivePropBtn.disabled = false;
+            archivePropBtn.title = "";
+          }
         }
-        syncArchiveBtn();
-        statusSelect?.addEventListener("change", syncArchiveBtn);
-
         archivePropBtn?.addEventListener("click", async () => {
-          const status = statusSelect?.value;
-          if (!ARCHIVE_STATUSES.includes(status)) return;
-          const choice = await showArchiveModal(status);
-          if (choice === "cancel") return;
+          const result = await showArchiveReasonModal(currentProperty?.listing_status);
+          if (!result) return;
           try {
-            await setPropertyListingStatus(currentPropertyId, status);
-            if (currentProperty) currentProperty.listing_status = status;
-            if (statusBadge) { statusBadge.textContent = status; statusBadge.style.display = "inline"; }
-            if (choice === "archive-stage") {
-              await stageDeletion(currentPropertyId);
-              if (currentProperty) currentProperty.staged_for_deletion_at = new Date().toISOString();
-              showToast("Property archived and staged for removal in 5 business days.", "success");
-            } else if (choice === "remove") {
-              await softDeleteProperty(currentPropertyId);
-              showToast("Property removed from Catalogue.", "success");
-              window.location.href = "index.html";
-            } else {
-              showToast("Property archived.", "success");
+            await archiveProperty(currentPropertyId, result.reason, result.status);
+            if (currentProperty) {
+              currentProperty.archived_at = new Date().toISOString();
+              currentProperty.archive_reason = result.reason;
+              if (result.status) currentProperty.listing_status = result.status;
             }
+            if (statusBadge) {
+              statusBadge.textContent = "Archived";
+              statusBadge.title = result.reason;
+              statusBadge.style.display = "inline";
+            }
+            if (archivePropBtn) {
+              archivePropBtn.disabled = true;
+              archivePropBtn.title = "Property already archived.";
+            }
+            showToast("Property archived.", "success");
           } catch (err) {
             showToast(err.message || "Failed to archive property.", "error");
-          }
-        });
-
-        deletePropBtn?.addEventListener("click", async () => {
-          const choice = await showDeleteModal();
-          if (choice === "cancel") return;
-          try {
-            if (choice === "remove") {
-              await softDeleteProperty(currentPropertyId);
-              showToast("Property removed from Catalogue.", "success");
-              window.location.href = "index.html";
-            } else if (choice === "stage") {
-              await stageDeletion(currentPropertyId);
-              if (currentProperty) currentProperty.staged_for_deletion_at = new Date().toISOString();
-              showToast("Property staged for removal in 5 business days. Undo in Catalogue.", "success");
-            }
-          } catch (err) {
-            showToast(err.message || "Failed to remove property.", "error");
           }
         });
       }
@@ -334,15 +351,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     }
 
+    formCleared = false;
     triggerCompute();
     lastSavedSnapshot = JSON.stringify(collectForm());
-    els.addOrSaveBtn.disabled = true;
-    els.addOrSaveBtn.textContent = "Save Changes";
+    refreshPrimaryButton();
   }
 
   function clearFormForNew(defaults = {}) {
     currentScenarioId = null;
     lastSavedSnapshot = null;
+    formCleared = false;
 
     if (els.scenarioName)        els.scenarioName.value        = "";
     if (els.scenarioDescription) els.scenarioDescription.value = "";
@@ -378,10 +396,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (els.archivedBadge) els.archivedBadge.style.display = "none";
 
     isDirty = false;
-    els.addOrSaveBtn.textContent = "Save Scenario";
-    els.addOrSaveBtn.disabled    = false;
-
     triggerCompute();
+    refreshPrimaryButton();
   }
 
   // Show more/less label
@@ -507,9 +523,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderNetIncome(r);
     renderSuggestedARV(r);
     renderSupplemental(r);
-    if (lastSavedSnapshot !== null) {
-      els.addOrSaveBtn.disabled = (JSON.stringify(collectForm()) === lastSavedSnapshot);
-    }
+    refreshPrimaryButton();
   }
 
   function renderCapitalRequired(r) {
@@ -631,8 +645,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     ).join("");
   }
 
-  // Save to Supabase
+  // Save / Erase to Supabase
   els.addOrSaveBtn.addEventListener("click", async () => {
+    // After "Clear All Input" on an existing property, this button erases it permanently
+    if (formCleared && currentPropertyId) {
+      const confirmed = await showEraseConfirmModal(currentProperty?.street || els.addrStreet.value);
+      if (!confirmed) return;
+      try {
+        await hardDeleteProperty(currentPropertyId);
+        showToast("Property erased from database.", "success");
+        window.location.href = "index.html";
+      } catch (err) {
+        showToast(err.message || "Failed to erase property.", "error");
+      }
+      return;
+    }
+
     const f = collectForm();
     const n = collectNums();
 
@@ -726,7 +754,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           const city   = els.addrCity.value.trim();
           const state  = els.addrState.value.trim();
           const zip    = els.addrZip.value.trim();
-          if (!street) { showSaveError("Street address is required."); els.addOrSaveBtn.disabled = false; els.addOrSaveBtn.textContent = "Save Scenario"; return; }
+          if (!street) { showSaveError("Street address is required."); refreshPrimaryButton(); return; }
           const link    = els.link.value.trim() || null;
           const newProp = await createProperty({ street, city, state, zip }, link);
           currentPropertyId = newProp.id;
@@ -747,17 +775,20 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     } catch (err) {
       showSaveError(err.message || "Save failed.");
-      els.addOrSaveBtn.disabled = false;
-      els.addOrSaveBtn.textContent = currentScenarioId ? "Save Changes" : "Save Scenario";
+      refreshPrimaryButton();
       return;
     }
 
-    els.addOrSaveBtn.disabled = (lastSavedSnapshot !== null && JSON.stringify(collectForm()) === lastSavedSnapshot);
-    els.addOrSaveBtn.textContent = "Save Changes";
+    refreshPrimaryButton();
   });
 
   // Clear
-  els.clearBtn.addEventListener("click", () => { clearFormForNew(); });
+  els.clearBtn.addEventListener("click", () => {
+    clearFormForNew();
+    formCleared = true;
+    refreshPrimaryButton();
+    showToast("Inputs cleared.", "info");
+  });
 
   // ----- Custom Back/Forward Guard via History API -----
   const historyGuard = (function () {

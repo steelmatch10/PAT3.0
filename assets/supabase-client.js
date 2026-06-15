@@ -79,7 +79,8 @@ async function fetchProperties() {
       updated_at,
       pinned,
       listing_status,
-      staged_for_deletion_at,
+      archived_at,
+      archive_reason,
       scenarios(module, updated_at, archived_at)
     `)
     .is('deleted_at', null)
@@ -115,7 +116,7 @@ async function fetchApprovedPropertyIds() {
 async function fetchProperty(propertyId) {
   const { data, error } = await supabaseClient
     .from('properties')
-    .select('id, street, city, state, zip, zillow_link, income_efficiency, property_management_cut, listing_status, staged_for_deletion_at')
+    .select('id, street, city, state, zip, zillow_link, income_efficiency, property_management_cut, listing_status, archived_at, archive_reason')
     .eq('id', propertyId)
     .single();
   if (error) { console.error('fetchProperty:', error.message); return null; }
@@ -176,36 +177,40 @@ async function togglePinProperties(propertyIds, pinned) {
   if (error) throw error;
 }
 
-async function softDeleteProperty(propertyId) {
+/**
+ * Archive a property: records archived_at + a required reason, and
+ * optionally updates the listing status at the same time.
+ * Does not remove the property — see hardDeleteProperty() for permanent removal.
+ */
+async function archiveProperty(propertyId, reason, status) {
+  const updates = {
+    archived_at: new Date().toISOString(),
+    archive_reason: reason,
+  };
+  if (status) updates.listing_status = status;
   const { error } = await supabaseClient
     .from('properties')
-    .update({ deleted_at: new Date().toISOString() })
+    .update(updates)
     .eq('id', propertyId);
   if (error) throw error;
 }
 
-async function setPropertyListingStatus(propertyId, status) {
-  const { error } = await supabaseClient
-    .from('properties')
-    .update({ listing_status: status })
-    .eq('id', propertyId);
-  if (error) throw error;
-}
+/**
+ * Permanently delete a property and all of its scenarios.
+ * Irreversible — no soft-delete fallback.
+ */
+async function hardDeleteProperty(propertyId) {
+  const { error: scenarioError } = await supabaseClient
+    .from('scenarios')
+    .delete()
+    .eq('property_id', propertyId);
+  if (scenarioError) throw scenarioError;
 
-async function stageDeletion(propertyId) {
-  const { error } = await supabaseClient
+  const { error: propertyError } = await supabaseClient
     .from('properties')
-    .update({ staged_for_deletion_at: new Date().toISOString() })
+    .delete()
     .eq('id', propertyId);
-  if (error) throw error;
-}
-
-async function cancelStagedDeletion(propertyId) {
-  const { error } = await supabaseClient
-    .from('properties')
-    .update({ staged_for_deletion_at: null })
-    .eq('id', propertyId);
-  if (error) throw error;
+  if (propertyError) throw propertyError;
 }
 
 // ── Scenarios ─────────────────────────────────────────────────────────────────
