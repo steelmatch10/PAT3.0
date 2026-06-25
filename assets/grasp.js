@@ -226,7 +226,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     ]);
 
     if (!founder) setAddressReadonly(true);
-    renderScenarioSelect(allScenarios);
+    await renderScenarioSelect(allScenarios);
 
     // Load per-property Income Efficiency from Supabase (already in currentProperty)
     if (ieInput) {
@@ -292,7 +292,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         showToast("Scenario archived.", "success");
         // Refresh list
         allScenarios = await fetchScenarios(propertyId);
-        renderScenarioSelect(allScenarios);
+        await renderScenarioSelect(allScenarios);
         if (allScenarios.length > 0) loadScenarioIntoForm(allScenarios[0]);
         else clearFormForNew();
       } catch (err) {
@@ -558,7 +558,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         showToast("Scenario saved.", "success");
         // Refresh scenario list
         allScenarios = await fetchScenarios(currentPropertyId);
-        renderScenarioSelect(allScenarios);
+        await renderScenarioSelect(allScenarios);
         els.scenarioSelect.value = id;
         els.scenarioActionsBar.style.display = "flex";
         // Update URL without reload
@@ -760,9 +760,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.addOrSaveBtn.disabled = true;
   }
 
-  function renderScenarioSelect(scenarios) {
+  async function renderScenarioSelect(scenarios) {
+    const investorCreatorIds = await fetchInvestorCreatorIds(scenarios.map(s => s.created_by));
     const opts = scenarios.map(s => {
-      const label = s.scenario_name + (s.archived_at ? " (archived)" : "");
+      const investorTag = investorCreatorIds.has(s.created_by) ? " (Investor)" : "";
+      const label = s.scenario_name + investorTag + (s.archived_at ? " (archived)" : "");
       return `<option value="${s.id}">${label}</option>`;
     });
     if (scenarios.length === 0) {

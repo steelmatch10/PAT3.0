@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PAT 3.0 — Settings</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <style>
+    main { padding-bottom: 48px; }
+
+    .spinner { display: none; text-align: center; padding: 60px; color: var(--muted); }
+    .spinner.visible { display: block; }
+
+    .section-heading {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+      margin: 32px 0 12px;
+    }
+
+    .settings-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px 26px;
+      max-width: 520px;
+    }
+    .settings-card + .settings-card { margin-top: 16px; }
+    .settings-card h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .settings-card .card-sub {
+      margin: 0 0 18px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .form-group { margin-bottom: 14px; }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 6px;
+    }
+    .form-group input {
+      width: 100%;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      padding: 9px 11px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .form-group input:focus { border-color: var(--brand); }
+
+    .inline-error {
+      font-size: 13px;
+      color: var(--bad);
+      margin-top: 4px;
+      display: none;
+    }
+    .inline-error.visible { display: block; }
+    .inline-success {
+      font-size: 13px;
+      color: var(--okay);
+      margin-top: 4px;
+      display: none;
+    }
+    .inline-success.visible { display: block; }
+
+    .mfa-status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+    }
+    .mfa-status-text { font-size: 14px; color: var(--text); }
+    .mfa-status-text .dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 8px;
+      background: var(--bad);
+    }
+    .mfa-status-text.enrolled .dot { background: var(--okay); }
+
+    .mfa-step-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin: 18px 0 8px;
+    }
+    .mfa-step-label:first-of-type { margin-top: 0; }
+
+    .qr-wrap {
+      display: flex;
+      justify-content: center;
+      background: #fff;
+      border-radius: 10px;
+      padding: 16px;
+      width: fit-content;
+    }
+    /* Supabase's returned SVG has no viewBox; settings.js adds one so this
+       scale is safe (otherwise scaling via width/height alone distorts the
+       QR module grid and breaks scannability). */
+    .qr-wrap svg { display: block; width: 180px; height: 180px; }
+
+    .mfa-secret-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .qr-secret {
+      font-family: monospace;
+      font-size: 13px;
+      color: var(--text);
+      word-break: break-all;
+      flex: 1;
+    }
+    .mfa-copy-btn {
+      flex-shrink: 0;
+      font-size: 12px;
+      padding: 5px 10px;
+    }
+
+    .code-input {
+      text-align: center;
+      font-size: 20px;
+      letter-spacing: .3em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container full">
+    <header class="header">
+      <div class="brand">
+        <div class="logo"></div>
+        <h1>Settings</h1>
+      </div>
+      <nav class="nav" style="display:flex;align-items:center;gap:12px;">
+        <span id="userEmail" style="font-size:13px;color:var(--muted);"></span>
+        <span id="roleBadge" class="role-badge"></span>
+        <a class="btn" href="Catalogue.html">Catalogue</a>
+        <a class="btn" href="index.html">Home</a>
+        <button class="btn" id="logoutBtn">Sign out</button>
+      </nav>
+    </header>
+
+    <main>
+      <div class="spinner visible" id="spinner">Loading…</div>
+
+      <div id="settingsContent" style="display:none;">
+        <p class="section-heading">Change Password</p>
+        <div class="settings-card">
+          <p class="card-sub">For your security, confirm your current password before setting a new one.</p>
+          <form id="passwordForm" novalidate>
+            <div class="form-group">
+              <label for="currentPassword">Current Password</label>
+              <input type="password" id="currentPassword" autocomplete="current-password" required />
+            </div>
+            <div class="form-group">
+              <label for="newPassword">New Password</label>
+              <input type="password" id="newPassword" autocomplete="new-password" minlength="8" required />
+            </div>
+            <div class="form-group">
+              <label for="confirmPassword">Confirm New Password</label>
+              <input type="password" id="confirmPassword" autocomplete="new-password" minlength="8" required />
+            </div>
+            <div class="inline-error" id="passwordError"></div>
+            <div class="inline-success" id="passwordSuccess"></div>
+            <button type="submit" class="btn primary" id="passwordSubmitBtn" style="margin-top:6px;">Update Password</button>
+          </form>
+        </div>
+
+        <p class="section-heading">Two-Factor Authentication</p>
+        <div class="settings-card">
+          <p class="card-sub">Add an extra layer of security to your account using an authenticator app (Google Authenticator, Authy, 1Password, etc). Once enrolled, you'll be asked for a code each time you sign in.</p>
+
+          <div class="mfa-status-row">
+            <span class="mfa-status-text" id="mfaStatusText"><span class="dot"></span>Not enrolled</span>
+            <button class="btn" id="mfaActionBtn">Enroll</button>
+          </div>
+
+          <div class="inline-error" id="mfaError"></div>
+
+          <div id="mfaEnrollPanel" style="display:none;">
+            <p class="mfa-step-label">1. Scan this code with your authenticator app</p>
+            <div class="qr-wrap">
+              <div id="mfaQrCode"></div>
+            </div>
+
+            <p class="mfa-step-label">Can't scan? Enter this code manually</p>
+            <div class="mfa-secret-row">
+              <span class="qr-secret" id="mfaSecret"></span>
+              <button type="button" class="btn mfa-copy-btn" id="mfaCopySecretBtn">Copy</button>
+            </div>
+
+            <p class="mfa-step-label">2. Enter the 6-digit code it generates</p>
+            <div class="form-group">
+              <input type="text" id="mfaVerifyCode" class="code-input" inputmode="numeric" maxlength="6" placeholder="000000" />
+            </div>
+            <div style="display:flex;gap:10px;">
+              <button class="btn" id="mfaCancelBtn">Cancel</button>
+              <button class="btn primary" id="mfaVerifyBtn">Verify &amp; Enable</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/supabase-client.js"></script>
+  <script src="assets/app.js"></script>
+  <script src="assets/settings.js"></script>
+</body>
+</html>

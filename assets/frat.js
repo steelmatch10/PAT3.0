@@ -145,7 +145,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (!founder) setAddressReadonly(true);
 
-    renderScenarioSelect(allScenarios);
+    await renderScenarioSelect(allScenarios);
 
     if (allScenarios.length > 0) {
       loadScenarioIntoForm(allScenarios[0]);
@@ -194,7 +194,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         await archiveScenario(currentScenarioId);
         showToast("Scenario archived.", "success");
         allScenarios = await fetchScenarios(_fratPropId);
-        renderScenarioSelect(allScenarios);
+        await renderScenarioSelect(allScenarios);
         if (allScenarios.length > 0) loadScenarioIntoForm(allScenarios[0]);
         else clearFormForNew();
       } catch (err) {
@@ -292,9 +292,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     triggerCompute();
   });
 
-  function renderScenarioSelect(scenarios) {
+  async function renderScenarioSelect(scenarios) {
+    const investorCreatorIds = await fetchInvestorCreatorIds(scenarios.map(s => s.created_by));
     const opts = scenarios.map(s => {
-      const label = s.scenario_name + (s.archived_at ? " (archived)" : "");
+      const investorTag = investorCreatorIds.has(s.created_by) ? " (Investor)" : "";
+      const label = s.scenario_name + investorTag + (s.archived_at ? " (archived)" : "");
       return `<option value="${s.id}">${label}</option>`;
     });
     if (scenarios.length === 0) {
@@ -746,7 +748,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         isDirty = false;
         // Refresh dropdown label (name may have changed)
         allScenarios = await fetchScenarios(_fratPropId);
-        renderScenarioSelect(allScenarios);
+        await renderScenarioSelect(allScenarios);
         els.scenarioSelect.value = currentScenarioId;
       } else {
         if (!currentPropertyId) {
@@ -764,7 +766,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentScenarioId = id;
         showToast("Scenario saved.", "success");
         allScenarios = await fetchScenarios(currentPropertyId);
-        renderScenarioSelect(allScenarios);
+        await renderScenarioSelect(allScenarios);
         els.scenarioSelect.value = id;
         els.scenarioActionsBar.style.display = "flex";
         const newUrl = new URL(location.href);
