@@ -267,6 +267,7 @@ document.addEventListener("DOMContentLoaded", async () => {
               ${founder ? `<input type="checkbox" class="cat-select" data-id="${p.id}" onclick="event.stopPropagation()" />` : ''}
               ${founder && p.pinned ? '<span class="cat-pin-badge">Pinned</span>' : ''}
               ${investor && approvedIds.has(p.id) ? '<span class="cat-pin-badge investor">Scenario editing enabled</span>' : ''}
+              ${founder && p.has_investor_created_scenario ? '<span class="cat-pin-badge investor" title="At least one scenario on this property was created by an investor">Investor-created scenario</span>' : ''}
               ${p.archived_at ? `<span class="cat-pin-badge listing-status" title="${escapeHtml(p.archive_reason || '')}">Archived</span>` : p.listing_status ? `<span class="cat-pin-badge listing-status">${escapeHtml(p.listing_status)}</span>` : ''}
             </div>
             <div class="cat-addr">

@@ -107,10 +107,10 @@ Catalogue.html   → saved properties
 
 ---
 
-## Project Status (updated 2026-06-15)
+## Project Status (updated 2026-06-24)
 
-**Active branch:** `feat/property-archive-delete-flow`
-**Last commit:** `d409639` — refine archive/delete flow: reason-required archive modal, true hard delete, themed dropdown (pushed)
+**Active branch:** `main`
+**Last commit (pending):** Phase 1B — security settings (password change + TOTP MFA + AAL2 step-up) and investor-created scenario badge
 
 ### Completed
 - Property Management Cut — replaces hardcoded 10% vacancy; per-property DB column, wired through `computeAll` and Supabase
@@ -119,19 +119,20 @@ Catalogue.html   → saved properties
 - Zillow link persistence — `updatePropertyZillowLink()` called in both GRASP and FRAT update paths
 - `parseFullAddress` city fallback bug fixed in both modules
 - Address editing persistence — `updatePropertyAddress()` in `supabase-client.js`, called on save when address fields change
-- **Phase 1A: Property archive/delete flow (revised)** — Archive Property is always enabled (no listing-status prerequisite); opens a modal requiring a reason (max 100 chars) and an optional listing-status selection, calling `archiveProperty()`. Standalone listing-status dropdown removed from GRASP/FRAT — status is now only set via the Archive modal. Delete Property button removed entirely; the 5-business-day staged-deletion/Undo system (`businessDaysUntilDeletion`, `softDeleteProperty`, `stageDeletion`, `cancelStagedDeletion`, Undo banner in Catalogue) was fully removed. New true hard-delete flow: "Clear All Input" (renamed from "Clear Inputs") on an existing property morphs the Save button into a red "Erase Property from Database" button, which opens a type-the-street-address confirmation modal and calls `hardDeleteProperty()` (real SQL DELETE, cascades to scenarios). For new/unsaved properties, the same button instead reads "Add New Property Analysis" and is disabled until the user edits again. Catalogue now shows an "Archived" badge (with reason on hover) in place of the old listing-status/staged-deletion badges. GRASP's "Properties" nav button renamed to "Home" to match FRAT/Catalogue.
-- **Migration 12 applied to Supabase** — `properties` now has `archived_at`/`archive_reason`; `staged_for_deletion_at` + its index dropped.
-- **Archive UI polish** — Archive Property button restyled with a distinct amber `.btn-archive` look (was sharing the harsh red `.btn-danger` outline with the scenario-archive button). Archive/Erase modals rebuilt with `.modal-header`/`.modal-icon`/`.modal-field` styling, live character counter on the reason field, inline validation. Added `createStyledDropdown()` in `app.js` — a themed custom dropdown replacing the archive modal's `<select>`, since native option-list popups ignore dark-theme CSS in Chrome/Edge.
+- **Phase 1A: Property archive/delete flow** — Archive Property modal (reason required, optional listing status), true hard-delete flow via "Erase Property from Database" with type-to-confirm. See migration 12.
+- **Archive UI polish** — themed `.btn-archive`, rebuilt modals, `createStyledDropdown()` in `app.js`.
+- **Phase 1B-A: Security settings** — new `settings.html` + `assets/settings.js`. Password change requires re-entering the current password (`patReauthenticate()` calls `signInWithPassword` again before `patUpdatePassword()` calls `updateUser()`) — closes a session-hijack gap where any valid session alone could change the password. Optional self-enrolled TOTP MFA: enroll → QR code + manual secret → 6-digit verify → enrolled; unenroll requires typing "REMOVE" in a confirm modal (reuses the `showEraseConfirmModal` pattern's UX, not its code). **Empirically confirmed via a disposable Supabase test user that Supabase does NOT auto-gate sign-in at AAL2 for MFA-enrolled users** — a plain `signInWithPassword` still returns a fully usable AAL1 session even with a verified TOTP factor on file. Built `mfa-challenge.html` (new file) as the missing step-up screen and wired the gate centrally into `initAuth()` in `supabase-client.js` (checks `auth.mfa.getAuthenticatorAssuranceLevel()`; redirects to the challenge page with a `returnTo` param if `nextLevel === 'aal2'` and not yet satisfied). Every page using `initAuth()` (index, Catalogue, Team, GRASP, FRAT, Settings) is covered automatically. Added Settings nav link to all 5 pages.
+- **Phase 1B-B: Investor-created scenario badge** — `scenarios.created_by` (existed in schema, was never written to) now populates automatically via a **database column default** (`DEFAULT auth.uid()`, migration 13) rather than client-side code — simpler and unspoofable. Migration 13 also tightens the investor INSERT RLS policy to `WITH CHECK (created_by = auth.uid() AND ...)`, closing a real vulnerability where an investor could otherwise have written an arbitrary `created_by` (including a founder's id) since the prior policy only checked `property_id`/role. Verified end-to-end against a fully disposable test user/property/scenario: confirmed real inserts populate `created_by` correctly, and confirmed a spoofing attempt (`created_by` set to a different user's id) is rejected with a 403 RLS violation. `fetchInvestorCreatorIds()` in `supabase-client.js` resolves a Set of investor user-ids; `renderScenarioSelect()` in both `grasp.js`/`frat.js` (parity-verified byte-identical) appends `" (Investor)"` to the dropdown label, and Catalogue's `fetchProperties()` exposes `has_investor_created_scenario` per property for a founder-only card badge in `catalogue.js`. **Documented limitation, not a bug**: badge reflects the creator's CURRENT `global_role`, not their role at scenario-creation time — if an investor is later promoted/demoted/removed, their historical scenarios' badge status follows their current status. Pre-migration scenarios have `created_by = NULL` and will never show the badge (no recoverable historical data).
+- **Plan was pressure-tested by an LLM council (5 advisors + peer review + chairman) before implementation** — caught the AAL2 sequencing gap and the `created_by` spoofing vector before any code was written. See `migration/13_scenarios_created_by_check.sql` for the resulting fix.
 
 ### Open Items (priority order)
 1. **Archived → unarchived restore flow** — explicitly deferred by user; build later.
-2. **Phase 1B (parallel):** Security — password change, MFA/OTP (`settings.html`, `supabase-client.js`)
-3. **Phase 1B (parallel):** Investor-created scenario indicator — badge when investor creates scenario; needs `created_by` column check + UI
-4. **Phase 2:** Go live on Vercel — after Phase 1B complete
-5. **Phase 3A:** Stitch UI overhaul (existing project: "Real Estate Investment Portal", id `18231999868876344727`)
-6. **Phase 3B:** Playwright tests — new session required; prompt saved in plan file
-7. **Per-property schema migration** — move taxes/insurance/HOA/rate/loanLength from `scenarios.inputs` JSONB → `properties` table. Defer until after go-live.
-8. **`computeAllGRASP()` / `computeAllFRAT()` split** — defer until after go-live.
+2. **Phase 1B follow-up (not yet built, intentionally deferred):** session/device list ("where am I logged in"), step-up auth gating specific destructive actions (hard delete, archive, export) behind AAL2, full activity/audit trail beyond the single investor-created badge. Named but not scoped — do not build until requested.
+3. **Phase 2:** Go live on Vercel — after Phase 1B complete
+4. **Phase 3A:** Stitch UI overhaul (existing project: "Real Estate Investment Portal", id `18231999868876344727`)
+5. **Phase 3B:** Playwright tests — new session required; prompt saved in plan file. **Must close out every 🔴/🟡 entry in `tasks/bug-log.md`** (see Workflow Orchestration → "Bug Triage & Regression Loop") in addition to net-new coverage.
+6. **Per-property schema migration** — move taxes/insurance/HOA/rate/loanLength from `scenarios.inputs` JSONB → `properties` table. Defer until after go-live.
+7. **`computeAllGRASP()` / `computeAllFRAT()` split** — defer until after go-live.
 
 ### Key Design Decisions (non-obvious)
 - `get_my_role()` is SECURITY DEFINER — do NOT remove this attribute
@@ -141,6 +142,9 @@ Catalogue.html   → saved properties
 - Archiving a property is currently one-way for this session (no unarchive UI yet — see Open Items)
 - "Erase Property from Database" is a TRUE hard delete (cascades to scenarios), irreversible, type-to-confirm — distinct from the dormant `deleted_at` soft-delete column which nothing writes to anymore
 - `createStyledDropdown()` in `app.js` is a reusable themed-dropdown helper — consider adopting it for other `<select>` elements if their native popups look out of place
+- Supabase does NOT enforce AAL2 at sign-in for MFA-enrolled users by default — confirmed empirically (see Phase 1B-A above). Any future auth work must NOT assume Supabase blocks AAL1 sessions; the app-level gate in `initAuth()` is the only thing currently enforcing it.
+- `scenarios.created_by` has a DB-level `DEFAULT auth.uid()` (migration 13) — never set it explicitly from client code; let the database populate it. The investor INSERT policy also requires `created_by = auth.uid()`, so attempting to override it from the client will fail RLS, not silently succeed.
+- Password change requires re-entering the current password (`patReauthenticate()`) before `patUpdatePassword()` — do not remove this step; it's what prevents a hijacked/unattended session from silently locking out the real account owner.
 
 ---
 
@@ -197,6 +201,23 @@ Catalogue.html   → saved properties
 - Point at logs, errors, failing tests — then resolve them
 - Zero context switching required from the user
 - Go fix failing CI tests without being told how
+
+### 8. Bug Triage & Regression Loop
+Every time the user reports a bug (or you discover one during review), before or while fixing it:
+1. **Log it in `tasks/bug-log.md`** — next sequential `B0xx` entry with: what was reported,
+   the verbatim symptom, the root cause once found, the fix applied, and a **Test status**
+   (🔴 no test / 🟡 planned / ✅ test in place). Use the existing entries as the format template.
+2. If the report isn't actually a bug (a missing feature, a design limitation, a third-party
+   constraint), still log it in `tasks/bug-log.md` with `Status: Not a bug` and cross-reference
+   the appropriate backlog file (e.g. `tasks/security-backlog.md`) for the real disposition.
+3. **Do not mark a bug-log entry's Test status as ✅ until a Playwright test actually exists**
+   for it. Until Phase 3B's Playwright suite exists, new entries default to 🔴.
+4. Once Phase 3B (Playwright) is underway: treat `tasks/bug-log.md` as the test backlog —
+   every 🔴/🟡 entry needs a corresponding test added or updated, then flip its status to ✅
+   in the same change that adds the test. Do not silently let entries go stale.
+5. This is a recursive loop by design — as the app grows, this file is both the bug history
+   and the live checklist of what regression coverage is missing. Treat gaps in it as
+   technical debt, not paperwork.
 
 ### 9. Commit & Push Workflow
 After completing any task that produces changes worth keeping:

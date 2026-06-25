@@ -22,7 +22,10 @@ async function patGetSession() {
 
 /**
  * Redirects to login.html if not authenticated.
- * Returns the current user object if authenticated.
+ * Redirects to mfa-challenge.html if the user has a verified MFA factor but the
+ * current session is only AAL1 — Supabase does NOT auto-block AAL1 sessions for
+ * MFA-enrolled users (confirmed empirically), so the app must gate it here.
+ * Returns the current user object if authenticated and at the required AAL.
  */
 async function initAuth() {
   const session = await patGetSession();
@@ -30,6 +33,17 @@ async function initAuth() {
     window.location.href = 'login.html';
     return null;
   }
+
+  const onChallengePage = window.location.pathname.endsWith('mfa-challenge.html');
+  if (!onChallengePage) {
+    const { data: aal, error: aalError } = await supabaseClient.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (!aalError && aal.nextLevel === 'aal2' && aal.currentLevel !== aal.nextLevel) {
+      const returnTo = window.location.pathname.split('/').pop() + window.location.search;
+      window.location.href = 'mfa-challenge.html?returnTo=' + encodeURIComponent(returnTo);
+      return null;
+    }
+  }
+
   return session.user;
 }
 
@@ -57,6 +71,92 @@ async function isFounder() {
   return member?.global_role === 'founder';
 }
 
+/**
+ * Given a list of user ids (e.g. distinct scenarios.created_by values), returns
+ * a Set of the ones whose CURRENT global_role is 'investor'. Used to badge
+ * investor-created scenarios. Reflects current role, not role at the time the
+ * scenario was created — a promoted/demoted/removed user's historical scenarios
+ * will follow their current status (or stop showing a badge if they're removed
+ * from team_members entirely). This is a documented, accepted limitation, not a bug.
+ */
+async function fetchInvestorCreatorIds(userIds) {
+  const distinctIds = [...new Set((userIds || []).filter(Boolean))];
+  if (distinctIds.length === 0) return new Set();
+  const { data, error } = await supabaseClient
+    .from('team_members')
+    .select('user_id')
+    .in('user_id', distinctIds)
+    .eq('global_role', 'investor');
+  if (error) { console.error('fetchInvestorCreatorIds:', error.message); return new Set(); }
+  return new Set((data || []).map(row => row.user_id));
+}
+
+// ── Security Settings (password + MFA) ─────────────────────────────────────────
+
+/**
+ * Re-authenticates the current user by password before a sensitive change
+ * (password update, MFA unenroll). Proves the caller knows the current
+ * password, not just that they hold a valid session. Note: this calls
+ * signInWithPassword again, which may refresh the SDK's stored session
+ * tokens for the same user — that's expected and harmless here since the
+ * immediately-following updateUser() call needs a valid session anyway.
+ */
+async function patReauthenticate(email, currentPassword) {
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password: currentPassword });
+  return { error };
+}
+
+/** Updates the current user's password. Call patReauthenticate first. */
+async function patUpdatePassword(newPassword) {
+  const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+  return { error };
+}
+
+/** Signs out of all sessions/devices for the current user, not just this one. */
+async function patSignOutEverywhere() {
+  await supabaseClient.auth.signOut({ scope: 'global' });
+  window.location.href = 'login.html';
+}
+
+/**
+ * Begins TOTP enrollment. Returns { data, error }; data.totp.qr_code is an SVG string,
+ * data.totp.secret is the manual-entry fallback. Each call uses a unique friendlyName —
+ * Supabase rejects a second enroll with a name that collides with an existing factor for
+ * the same user (including abandoned/unverified ones), so a fixed/empty name would block
+ * retries after a failed or abandoned attempt.
+ */
+async function patMfaEnroll() {
+  const { data, error } = await supabaseClient.auth.mfa.enroll({
+    factorType: 'totp',
+    friendlyName: `Authenticator ${Date.now()}`,
+  });
+  return { data, error };
+}
+
+/** Creates a challenge for a given factor (needed before verify). */
+async function patMfaChallenge(factorId) {
+  const { data, error } = await supabaseClient.auth.mfa.challenge({ factorId });
+  return { data, error };
+}
+
+/** Verifies a 6-digit code against a challenge, completing enrollment or step-up. */
+async function patMfaVerify(factorId, challengeId, code) {
+  const { data, error } = await supabaseClient.auth.mfa.verify({ factorId, challengeId, code });
+  return { data, error };
+}
+
+/** Lists all MFA factors for the current user. */
+async function patMfaListFactors() {
+  const { data, error } = await supabaseClient.auth.mfa.listFactors();
+  return { data, error };
+}
+
+/** Removes an MFA factor. Caller should confirm via a type-to-confirm modal first. */
+async function patMfaUnenroll(factorId) {
+  const { error } = await supabaseClient.auth.mfa.unenroll({ factorId });
+  return { error };
+}
+
 // ── Properties ────────────────────────────────────────────────────────────────
 
 /**
@@ -81,13 +181,14 @@ async function fetchProperties() {
       listing_status,
       archived_at,
       archive_reason,
-      scenarios(module, updated_at, archived_at)
+      scenarios(module, updated_at, archived_at, created_by)
     `)
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
   if (error) { console.error('fetchProperties:', error.message); return []; }
-  return (data || []).map(p => {
+
+  const properties = (data || []).map(p => {
     const allScenarios = p.scenarios || [];
     const active = allScenarios.filter(s => !s.archived_at);
     const latest = active.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
@@ -97,6 +198,15 @@ async function fetchProperties() {
       latest_module: latest?.module || 'GRASP',
     };
   });
+
+  // Resolve which scenario creators are investors, then flag any property with
+  // at least one investor-created scenario (reflects creators' CURRENT role).
+  const allCreatorIds = properties.flatMap(p => (p.scenarios || []).map(s => s.created_by));
+  const investorCreatorIds = await fetchInvestorCreatorIds(allCreatorIds);
+  return properties.map(p => ({
+    ...p,
+    has_investor_created_scenario: (p.scenarios || []).some(s => investorCreatorIds.has(s.created_by)),
+  }));
 }
 
 /**
